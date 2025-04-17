@@ -512,6 +512,7 @@ void REMORA::WriteNCPlotFile_which(int lev, int which_subdomain, bool write_head
     //ncmpi_end_indep_data(ncf.ncid);
 
     cons_new[lev]->FillBoundary(geom[lev].periodicity());
+    boundary_offset(cons_new[lev], lev, Salt_comp, solverChoice.salt_offset_EW, solverChoice.salt_offset_NS);
 
     mask_arrays_for_write(lev, (Real) fill_value);
 

@@ -79,6 +79,8 @@ REMORA::timeStepML (Real time, int /*iteration*/)
                 // We must fill the ghost cells of these so that the parallel copy works correctly
                 cons_old[lev]->FillBoundary(geom[lev].periodicity());
                 cons_new[lev]->FillBoundary(geom[lev].periodicity());
+                boundary_offset(cons_old[lev], lev, Salt_comp, solverChoice.salt_offset_EW, solverChoice.salt_offset_NS);
+                boundary_offset(cons_new[lev], lev, Salt_comp, solverChoice.salt_offset_EW, solverChoice.salt_offset_NS);
                 FPr_c[lev].RegisterCoarseData({cons_old[lev], cons_new[lev]}, {time, time + dt[lev]});
             }
 
@@ -145,6 +147,8 @@ REMORA::timeStepML (Real time, int /*iteration*/)
                 // We must fill the ghost cells of these so that the parallel copy works correctly
                 cons_old[lev]->FillBoundary(geom[lev].periodicity());
                 cons_new[lev]->FillBoundary(geom[lev].periodicity());
+                boundary_offset(cons_old[lev], lev, Salt_comp, solverChoice.salt_offset_EW, solverChoice.salt_offset_NS);
+                boundary_offset(cons_new[lev], lev, Salt_comp, solverChoice.salt_offset_EW, solverChoice.salt_offset_NS);
                 FPr_c[lev].RegisterCoarseData({cons_old[lev], cons_new[lev]}, {time, time + dt[lev]});
             }
 

@@ -994,6 +994,8 @@ private:
     void post_update (amrex::MultiFab& state_mf, const amrex::Real time, const amrex::Geometry& geom);
     void fill_rhs (amrex::MultiFab& rhs_mf, const amrex::MultiFab& state_mf, const amrex::Real time, const amrex::Geometry& geom);
 
+    void boundary_offset (amrex::MultiFab* mf, int lev, int icomp, amrex::Real offset_NS, amrex::Real offset_EW);
+
     ////////////////
     // private data members
 

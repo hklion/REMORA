@@ -15,11 +15,7 @@ PhysBCFunctNoOp null_bc;
 void
 REMORA::FillPatch (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab*> const& mfs,
                   const int  bccomp,
-#ifdef REMORA_USE_NETCDF
                   const int bdy_var_type,
-#else
-                  const int /*bdy_var_type*/,
-#endif
                   const int  icomp,
                   const bool fill_all,
                   const bool fill_set,
@@ -135,6 +131,11 @@ REMORA::FillPatch (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab*> c
         // Fill corners of the domain with periodic data
         if  ( mf_box.ixType() == IndexType(IntVect(0,0,0)) ) {
             mf_to_fill.EnforcePeriodicity(geom[lev].periodicity());
+            if (bdy_var_type == BdyVars::t) {
+                boundary_offset(&mf_to_fill, lev, Salt_comp, solverChoice.salt_offset_EW, solverChoice.salt_offset_NS);
+            } else if (bdy_var_type == BdyVars::s) {
+                boundary_offset(&mf_to_fill, lev, 0, solverChoice.salt_offset_EW, solverChoice.salt_offset_NS);
+            }
         }
 
         // Also enforce free-slip at top boundary (on xvel or yvel)

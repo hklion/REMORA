@@ -62,6 +62,7 @@ function(build_remora_lib remora_lib_name)
        ${SRC_DIR}/BoundaryConditions/REMORA_BoundaryConditions_xvel.cpp
        ${SRC_DIR}/BoundaryConditions/REMORA_BoundaryConditions_yvel.cpp
        ${SRC_DIR}/BoundaryConditions/REMORA_BoundaryConditions_zvel.cpp
+       ${SRC_DIR}/BoundaryConditions/REMORA_boundary_offset.cpp
        ${SRC_DIR}/BoundaryConditions/REMORA_FillPatch.cpp
        ${SRC_DIR}/BoundaryConditions/REMORA_FillPatcher.cpp
        ${SRC_DIR}/BoundaryConditions/REMORA_PhysBCFunct.cpp

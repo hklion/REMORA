@@ -7,6 +7,8 @@ ifeq ($(USE_PNETCDF), TRUE)
 CEXE_sources += REMORA_BoundaryConditions_netcdf.cpp
 endif
 
+CEXE_sources += REMORA_boundary_offset.cpp
+
 CEXE_sources += REMORA_FillPatch.cpp
 CEXE_sources += REMORA_FillPatcher.cpp
 

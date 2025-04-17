@@ -425,6 +425,9 @@ struct SolverChoice {
             amrex::Abort("Climatology nudging requires building with NetCDF");
         }
 #endif
+
+        pp.query("salt_offset_NS",salt_offset_NS);
+        pp.query("salt_offset_EW",salt_offset_EW);
     }
 
     void display()
@@ -665,6 +668,9 @@ struct SolverChoice {
     bool do_temp_clim_nudg = false;
     bool do_salt_clim_nudg = false;
     bool do_any_clim_nudg = false;
+
+    amrex::Real salt_offset_EW = amrex::Real(0.0);
+    amrex::Real salt_offset_NS = amrex::Real(0.0);
 };
 
 #endif
