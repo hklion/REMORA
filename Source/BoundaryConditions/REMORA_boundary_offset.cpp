@@ -9,8 +9,6 @@ void REMORA::boundary_offset (MultiFab* mf, int lev, int icomp, Real offset_EW, 
     const auto& dom_lo = lbound(domain);
     const auto& dom_hi = ubound(domain);
 
-    amrex::Abort();
-
     for (MFIter mfi(*mf,TilingIfNotGPU()); mfi.isValid(); ++mfi) {
         Box bx = mfi.growntilebox(mf->nGrowVect());
         const auto& bx_lo = lbound(bx);
