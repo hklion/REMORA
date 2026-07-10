@@ -229,18 +229,25 @@ REMORA::WritePlotFile (int istep_for_plot)
                 icomp_rho++;
             }
         }
+        Real Hscale = solverChoice.rho0 * Cp;
         if (plot_name == "lrflux" ) {
             if (!solverChoice.bulk_fluxes) {
                 amrex::Abort("Attempting to write longwave radiation flux to plotfile. Variable not allocated when bulk_fluxes turned off");
             }
-            for (int lev = 0; lev <= finest_level; ++lev) { MultiFab::Copy(mf_2d_rho[lev],*vec_lrflx[lev],0,icomp_rho,1,0); }
+            for (int lev = 0; lev <= finest_level; ++lev) {
+                MultiFab::Copy(mf_2d_rho[lev],*vec_lrflx[lev],0,icomp_rho,1,0);
+                mf_2d_rho[lev].mult(Hscale, icomp_rho, 1);
+            }
             icomp_rho++;
         }
         if (plot_name == "lhflux" ) {
             if (!solverChoice.bulk_fluxes) {
                 amrex::Abort("Attempting to write latent heat flux to plotfile. Variable not allocated when bulk_fluxes turned off");
             }
-            for (int lev = 0; lev <= finest_level; ++lev) { MultiFab::Copy(mf_2d_rho[lev],*vec_lhflx[lev],0,icomp_rho,1,0); }
+            for (int lev = 0; lev <= finest_level; ++lev) {
+                MultiFab::Copy(mf_2d_rho[lev],*vec_lhflx[lev],0,icomp_rho,1,0);
+                mf_2d_rho[lev].mult(Hscale, icomp_rho, 1);
+            }
             icomp_rho++;
         }
         if (plot_name == "srflux" ) {
@@ -248,13 +255,17 @@ REMORA::WritePlotFile (int istep_for_plot)
                 amrex::Abort("Attempting to write shortwave radiation flux to plotfile. Variable not allocated when bulk_fluxes turned off");
             }
             for (int lev = 0; lev <= finest_level; ++lev) { MultiFab::Copy(mf_2d_rho[lev],*vec_srflx[lev],0,icomp_rho,1,0); }
+            // Already in W/m2 so doesn't need to do unit conversion
             icomp_rho++;
         }
         if (plot_name == "shflux" ) {
             if (!solverChoice.bulk_fluxes) {
                 amrex::Abort("Attempting to write sensible heat flux to plotfile. Variable not allocated when bulk_fluxes turned off");
             }
-            for (int lev = 0; lev <= finest_level; ++lev) { MultiFab::Copy(mf_2d_rho[lev],*vec_shflx[lev],0,icomp_rho,1,0); }
+            for (int lev = 0; lev <= finest_level; ++lev) {
+                MultiFab::Copy(mf_2d_rho[lev],*vec_shflx[lev],0,icomp_rho,1,0);
+                mf_2d_rho[lev].mult(Hscale, icomp_rho, 1);
+            }
             icomp_rho++;
         }
     }
