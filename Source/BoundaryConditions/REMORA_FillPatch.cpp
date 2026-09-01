@@ -45,7 +45,9 @@ REMORA::FillPatch (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab*> c
                   const int /*icomp_calc*/,
                   const Real /*dt_lev*/,
 #endif
-                  const MultiFab& mf_calc)
+                  const MultiFab& mf_calc,
+                  Vector<MultiFab*> const& mfs_crse_old,
+                  Vector<MultiFab*> const& mfs_crse_new)
 {
     BL_PROFILE_VAR("REMORA::FillPatch()",REMORA_FillPatch);
     amrex::Interpolater* mapper = nullptr;
@@ -123,7 +125,14 @@ REMORA::FillPatch (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab*> c
     {
         Vector<MultiFab*> fmf = {mfs[lev], mfs[lev]};
         Vector<Real> ftime    = {t_old[lev], t_new[lev]};
+        // A subcycled fine level asks for times inside the parent's step, so the coarse
+        // contribution has to be interpolated. Passing one MultiFab twice makes
+        // FillPatchTwoLevels return it whatever the time: fine in lockstep, wrong here.
         Vector<MultiFab*> cmf = {mfs[lev-1], mfs[lev-1]};
+        if (do_substep && int(mfs_crse_old.size()) >= lev && int(mfs_crse_new.size()) >= lev) {
+            cmf = {mfs_crse_old[lev-1], mfs_crse_new[lev-1]};
+            mfs_crse_old[lev-1]->FillBoundary(geom[lev-1].periodicity());
+        }
         Vector<Real> ctime    = {t_old[lev-1], t_new[lev-1]};
 
         mfs[lev-1]->FillBoundary(geom[lev-1].periodicity());
@@ -204,7 +213,9 @@ REMORA::FillPatchNoBC (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab
 #endif
                   const int  icomp,
                   const bool fill_all,
-                  const bool fill_set)
+                  const bool fill_set,
+                  Vector<MultiFab*> const& mfs_crse_old,
+                  Vector<MultiFab*> const& mfs_crse_new)
 {
     // HACK: Note that this is hacky; should be able to have a single call to FillPatch with a
     // flag for bcs, but for some reason it was acting weird, so we're splitting this out into
@@ -284,7 +295,14 @@ REMORA::FillPatchNoBC (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab
     {
         Vector<MultiFab*> fmf = {mfs[lev], mfs[lev]};
         Vector<Real> ftime    = {t_old[lev], t_new[lev]};
+        // A subcycled fine level asks for times inside the parent's step, so the coarse
+        // contribution has to be interpolated. Passing one MultiFab twice makes
+        // FillPatchTwoLevels return it whatever the time: fine in lockstep, wrong here.
         Vector<MultiFab*> cmf = {mfs[lev-1], mfs[lev-1]};
+        if (do_substep && int(mfs_crse_old.size()) >= lev && int(mfs_crse_new.size()) >= lev) {
+            cmf = {mfs_crse_old[lev-1], mfs_crse_new[lev-1]};
+            mfs_crse_old[lev-1]->FillBoundary(geom[lev-1].periodicity());
+        }
         Vector<Real> ctime    = {t_old[lev-1], t_new[lev-1]};
 
         mfs[lev-1]->FillBoundary(geom[lev-1].periodicity());

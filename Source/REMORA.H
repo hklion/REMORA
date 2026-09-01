@@ -1216,7 +1216,9 @@ public:
                     const int  n_not_fill=0,
                     const int icomp_calc=0,
                     const amrex::Real dt = zero,
-                    const amrex::MultiFab& mf_calc = amrex::MultiFab());
+                    const amrex::MultiFab& mf_calc = amrex::MultiFab(),
+                    amrex::Vector<amrex::MultiFab*> const& mfs_crse_old = {},
+                    amrex::Vector<amrex::MultiFab*> const& mfs_crse_new = {});
 
     /** \brief Fill a new MultiFab by copying in phi from valid region and filling ghost cells without applying boundary conditions */
     void FillPatchNoBC (int lev, amrex::Real time,
@@ -1225,7 +1227,9 @@ public:
                     const int bdy_var_type = BdyVars::null,
                     const int icomp=0,
                     const bool fill_all=true,
-                    const bool fill_set=false);
+                    const bool fill_set=false,
+                    amrex::Vector<amrex::MultiFab*> const& mfs_crse_old = {},
+                    amrex::Vector<amrex::MultiFab*> const& mfs_crse_new = {});
     /** \brief Fill boundary data from netcdf file */
     void fill_from_bdyfiles (int lev,
                              amrex::MultiFab& mf_to_fill,

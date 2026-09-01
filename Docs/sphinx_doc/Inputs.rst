@@ -365,13 +365,17 @@ List of Parameters
 | **amr.do_substep**               | whether to       | 0 if false, 1      | 0                 |
 |                                  | sub-step finer   | if true            |                   |
 |                                  |                  |                    |                   |
-|                                  | levels in time   |                    |                   |
-|                                  |                  | NOTE: true         |                   |
-|                                  |                  | will               |                   |
+|                                  | levels in time   | NOTE: under        |                   |
 |                                  |                  |                    |                   |
-|                                  |                  | trigger Assert     |                   |
-|                                  |                  |                    |                   |
-|                                  |                  | failure            |                   |
+|                                  |                  | development        |                   |
++----------------------------------+------------------+--------------------+-------------------+
+| **remora.dt_ref_ratio**          | time step        | integer > 0,       | spatial           |
+|                                  | ratio between    |                    |                   |
+|                                  |                  | one value or       | refinement        |
+|                                  | a level and      |                    |                   |
+|                                  |                  | one per ref.       | ratio             |
+|                                  | its parent       |                    |                   |
+|                                  |                  | level              |                   |
 +----------------------------------+------------------+--------------------+-------------------+
 
 .. _notes-2:
@@ -399,7 +403,13 @@ Notes
 -  **amr.max_grid_size** must be a multiple of **amr.blocking_factor**
    at every level
 
--  the substepping turned on by **amr.do_substep** is NOT implemented yet so will trigger an Assert.
+-  **amr.do_substep** is under development. The recursive driver and the per-level time step
+   hierarchy work, but the coarse-to-fine coupling of the 2D (barotropic) mode does not yet, so a
+   refined level is advanced against stale boundary data. Use the default of 0 for science runs.
+
+-  **remora.dt_ref_ratio** only has an effect when **amr.do_substep** = 1. It defaults to the
+   spatial refinement ratio but need not equal it. Setting it to 1 advances every level with the
+   level-0 time step, which is how the sub-stepped driver is compared against the lockstep one.
 
 .. _examples-of-usage-3:
 

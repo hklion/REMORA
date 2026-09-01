@@ -2475,11 +2475,10 @@ REMORA::clear_avgdown_masks (int lev)
 /**
  * Set how many steps each level takes per parent step.
  *
- * The default is the spatial refinement ratio, but ROMS keeps the two independent
- * (RefineSteps is read separately from RefineScale in metrics.F), and so does ERF via
- * erf.dt_ref_ratio. amr.dt_ref_ratio does the same here, taking either one value for all
- * levels or one per level. Setting it to 1 runs the recursive driver with the levels in
- * lockstep, which is how the subcycled path is compared against timeStepML.
+ * Defaults to the spatial refinement ratio, but the two are independent in ROMS
+ * (RefineSteps vs RefineScale) and in ERF. remora.dt_ref_ratio takes one value for all
+ * levels or one per level; setting it to 1 runs the recursive driver in lockstep, which is
+ * how the subcycled path is compared against timeStepML.
  *
  * @param[in   ] nlevs_max  max_level + 1
  */
@@ -2494,20 +2493,20 @@ REMORA::set_nsubsteps (int nlevs_max)
     }
 
     if (max_level > 0) {
-        ParmParse pp_amr("amr");
-        int count = pp_amr.countval("dt_ref_ratio");
+        ParmParse pp("remora");
+        int count = pp.countval("dt_ref_ratio");
         if (count > 0) {
             Vector<int> nsub(nlevs_max, 0);
             if (count == 1) {
-                pp_amr.queryarr("dt_ref_ratio", nsub, 0, 1);
+                pp.queryarr("dt_ref_ratio", nsub, 0, 1);
                 for (int lev = 1; lev <= max_level; ++lev) { nsubsteps[lev] = nsub[0]; }
             } else {
-                pp_amr.queryarr("dt_ref_ratio", nsub, 0, max_level);
+                pp.queryarr("dt_ref_ratio", nsub, 0, max_level);
                 for (int lev = 1; lev <= max_level; ++lev) { nsubsteps[lev] = nsub[lev-1]; }
             }
             for (int lev = 1; lev <= max_level; ++lev) {
                 AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nsubsteps[lev] > 0,
-                    "amr.dt_ref_ratio must be positive: it divides the parent timestep");
+                    "remora.dt_ref_ratio must be positive: it divides the parent timestep");
             }
         }
     }

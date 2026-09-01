@@ -68,9 +68,8 @@ REMORA::Advance (int lev, Real time, Real dt_lev, int /*iteration*/, int /*ncycl
  * Store this level's old and new state in the coarse/fine fill patchers so the next finer
  * level can interpolate its contact points to its own sub-times.
  *
- * Called at the end of Advance, once the new state is valid. Under subcycling the parent
- * completes its whole step first, so {t_old, t_new} brackets every time the child asks for
- * -- REMORAFillPatcher::InterpolateInTime asserts that, catching a child that runs ahead.
+ * Called at the end of Advance, once the new state is valid. The parent completes its whole
+ * step first, so {t_old, t_new} brackets every time the child asks for.
  *
  * @param[in] lev            level of refinement
  * @param[in] time           simulation time at start of the step just taken

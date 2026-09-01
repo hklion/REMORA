@@ -351,7 +351,7 @@ add_test_log(Advection_ML_subcycle      "remora_exec" "with dt = 50")
 # makes. Keep this passing through every later phase.
 add_test_r_selfcompare(Advection_ML_subcycle_identity "remora_exec" "plt00020"
                        "amr.do_substep=0"
-                       "amr.do_substep=1 amr.dt_ref_ratio=1")
+                       "amr.do_substep=1 remora.dt_ref_ratio=1")
 
 #=============================================================================
 # High-resolution initialization (remora.hires_grid_level / remora.hires_init_level)

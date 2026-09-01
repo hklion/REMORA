@@ -3,7 +3,7 @@
 # The subcycled driver at a timestep ratio of 1 must reproduce the lockstep driver.
 #
 # Run twice from CTestList: amr.do_substep=0 goes through timeStepML, and
-# amr.do_substep=1 amr.dt_ref_ratio=1 goes through the recursive timeStep with every level
+# amr.do_substep=1 remora.dt_ref_ratio=1 goes through the recursive timeStep with every level
 # on dt[0]. The two plotfiles must agree, which separates "the recursive driver changed
 # something" from "subcycling changes the answer" -- the second is expected, the first is a
 # bug. No gold file: neither run is the baseline.

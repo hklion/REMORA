@@ -5,9 +5,8 @@ using namespace amrex;
 /**
  * Scale one level's RHS momentum terms by 1/cell area.
  *
- * Per level, not over all levels: under subcycling a coarse step is followed by nsubsteps
- * fine steps, and scaling every level on every level's step would divide and remultiply an
- * untouched level's ru/rv once per parent step -- not an identity in floating point.
+ * Per level, not over all levels: /cff then *cff is not an identity in floating point, so
+ * scaling every level on every level's step perturbs untouched levels once per parent step.
  *
  * @param[in] lev            level of refinement
  */

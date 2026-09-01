@@ -23,9 +23,8 @@ REMORA::timeStep (int lev, Real time, int iteration)
         {
             if (istep[lev] % regrid_int == 0)
             {
-                // regrid interpolates this level's data to build or remake lev+1, so its
-                // ghost cells have to be current first. The swap has not happened yet, so
-                // the "new" state being filled here is the one regrid reads.
+                // regrid interpolates this level's data to build lev+1, so its ghost cells
+                // must be current. The swap has not happened, so "new" is what regrid reads.
                 FillPatchNoBC(lev, time, *cons_new[lev], cons_new, BdyVars::t,0,true,true);
                 FillPatchNoBC(lev, time, *xvel_new[lev], xvel_new, BdyVars::u,0,true,true);
                 FillPatchNoBC(lev, time, *yvel_new[lev], yvel_new, BdyVars::v,0,true,true);
@@ -65,9 +64,8 @@ REMORA::timeStep (int lev, Real time, int iteration)
     t_old[lev] = t_new[lev];
     t_new[lev] += dt[lev];
 
-    // A child must stay inside its parent's step: that is what lets the fill patchers
-    // interpolate its contact points, and REMORAFillPatcher asserts it too, but from deep
-    // inside the interpolator where the message says nothing about which level ran ahead.
+    // A child must stay inside its parent's step, or the fill patchers have nothing to
+    // interpolate within. REMORAFillPatcher asserts this too, but cannot name the level.
     if (lev > 0) {
         const Real eps = Real(1.e-6) * dt[lev];
         AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
