@@ -117,10 +117,7 @@ REMORA::REMORA ()
     int nlevs_max = max_level + 1;
 
     istep.resize(nlevs_max, 0);
-    nsubsteps.resize(nlevs_max, 1);
-    for (int lev = 1; lev <= max_level; ++lev) {
-        nsubsteps[lev] = do_substep ? MaxRefRatio(lev-1) : 1;
-    }
+    set_nsubsteps(nlevs_max);
 
     physbcs.resize(nlevs_max);
 
@@ -181,10 +178,7 @@ REMORA::REMORA (const amrex::RealBox& rb, int max_level_in, const amrex::Vector<
     int nlevs_max = max_level + 1;
 
     istep.resize(nlevs_max, 0);
-    nsubsteps.resize(nlevs_max, 1);
-    for (int lev = 1; lev <= max_level; ++lev) {
-        nsubsteps[lev] = do_substep ? MaxRefRatio(lev-1) : 1;
-    }
+    set_nsubsteps(nlevs_max);
 
     physbcs.resize(nlevs_max);
 
@@ -2474,6 +2468,47 @@ REMORA::clear_avgdown_masks (int lev)
             vec_mskr_crse_on_fine[crse_lev].reset();
             vec_msku_crse_on_fine[crse_lev].reset();
             vec_mskv_crse_on_fine[crse_lev].reset();
+        }
+    }
+}
+
+/**
+ * Set how many steps each level takes per parent step.
+ *
+ * The default is the spatial refinement ratio, but ROMS keeps the two independent
+ * (RefineSteps is read separately from RefineScale in metrics.F), and so does ERF via
+ * erf.dt_ref_ratio. amr.dt_ref_ratio does the same here, taking either one value for all
+ * levels or one per level. Setting it to 1 runs the recursive driver with the levels in
+ * lockstep, which is how the subcycled path is compared against timeStepML.
+ *
+ * @param[in   ] nlevs_max  max_level + 1
+ */
+void
+REMORA::set_nsubsteps (int nlevs_max)
+{
+    nsubsteps.resize(nlevs_max, 1);
+    if (!do_substep) { return; }
+
+    for (int lev = 1; lev <= max_level; ++lev) {
+        nsubsteps[lev] = MaxRefRatio(lev-1);
+    }
+
+    if (max_level > 0) {
+        ParmParse pp_amr("amr");
+        int count = pp_amr.countval("dt_ref_ratio");
+        if (count > 0) {
+            Vector<int> nsub(nlevs_max, 0);
+            if (count == 1) {
+                pp_amr.queryarr("dt_ref_ratio", nsub, 0, 1);
+                for (int lev = 1; lev <= max_level; ++lev) { nsubsteps[lev] = nsub[0]; }
+            } else {
+                pp_amr.queryarr("dt_ref_ratio", nsub, 0, max_level);
+                for (int lev = 1; lev <= max_level; ++lev) { nsubsteps[lev] = nsub[lev-1]; }
+            }
+            for (int lev = 1; lev <= max_level; ++lev) {
+                AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nsubsteps[lev] > 0,
+                    "amr.dt_ref_ratio must be positive: it divides the parent timestep");
+            }
         }
     }
 }

@@ -23,6 +23,14 @@ REMORA::timeStep (int lev, Real time, int iteration)
         {
             if (istep[lev] % regrid_int == 0)
             {
+                // regrid interpolates this level's data to build or remake lev+1, so its
+                // ghost cells have to be current first. The swap has not happened yet, so
+                // the "new" state being filled here is the one regrid reads.
+                FillPatchNoBC(lev, time, *cons_new[lev], cons_new, BdyVars::t,0,true,true);
+                FillPatchNoBC(lev, time, *xvel_new[lev], xvel_new, BdyVars::u,0,true,true);
+                FillPatchNoBC(lev, time, *yvel_new[lev], yvel_new, BdyVars::v,0,true,true);
+                FillPatch(lev, time, *zvel_new[lev], zvel_new, zvel_bc(), BdyVars::null,0,true,true);
+
                 // regrid could add newly refine levels (if finest_level < max_level)
                 // so we save the previous finest level index
                 int old_finest = finest_level;
@@ -51,11 +59,22 @@ REMORA::timeStep (int lev, Real time, int iteration)
         }
     }
 
-    scale_rhs_vars();
+    scale_rhs_vars(lev);
 
     // Update what we call "old" and "new" time
     t_old[lev] = t_new[lev];
     t_new[lev] += dt[lev];
+
+    // A child must stay inside its parent's step: that is what lets the fill patchers
+    // interpolate its contact points, and REMORAFillPatcher asserts it too, but from deep
+    // inside the interpolator where the message says nothing about which level ran ahead.
+    if (lev > 0) {
+        const Real eps = Real(1.e-6) * dt[lev];
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+            t_old[lev] >= t_old[lev-1] - eps && t_new[lev] <= t_new[lev-1] + eps,
+            "REMORA::timeStep: level " + std::to_string(lev) + " stepped outside the time "
+            "interval of level " + std::to_string(lev-1));
+    }
 
     if (Verbose()) {
         amrex::Print() << "[Level " << lev << " step " << istep[lev]+1 << "] ";
@@ -74,7 +93,7 @@ REMORA::timeStep (int lev, Real time, int iteration)
 
     ++istep[lev];
 
-    scale_rhs_vars_inv();
+    scale_rhs_vars_inv(lev);
 
     if (Verbose())
     {

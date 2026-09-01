@@ -203,6 +203,30 @@ function(add_test_abort TEST_NAME TEST_EXE ABORT_SUBSTRING)
     )
 endfunction(add_test_abort)
 
+# Run the same input twice under different runtime options and require the two plotfiles to
+# agree. For an invariant between two code paths -- neither run is a baseline, so this needs
+# no gold data and cannot go stale against one.
+function(add_test_r_selfcompare TEST_NAME TEST_EXE PLTFILE OPTIONS_A OPTIONS_B)
+
+    setup_test()
+
+    resolve_test_exe("${TEST_DIR}" "${TEST_EXE}" TEST_EXE)
+
+    set(FCOMPARE_TOLERANCE "-r 1e-11 --abs_tol 1.0e-11")
+    set(FCOMPARE_FLAGS "-a ${FCOMPARE_TOLERANCE}")
+    set(test_command sh -c "mkdir -p runA runB && cd runA && ${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i ${OPTIONS_A} > ../${TEST_NAME}.log 2>&1 && cd ../runB && ${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i ${OPTIONS_B} >> ../${TEST_NAME}.log 2>&1 && cd .. && ${FCOMPARE_EXE} ${FCOMPARE_FLAGS} runA/${PLTFILE} runB/${PLTFILE}")
+
+    add_test(${TEST_NAME} ${test_command})
+    set_tests_properties(${TEST_NAME}
+        PROPERTIES
+        TIMEOUT 5400
+        PROCESSORS ${NP}
+        WORKING_DIRECTORY "${CURRENT_TEST_BINARY_DIR}/"
+        LABELS "regression"
+        ATTACHED_FILES_ON_FAIL "${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.log"
+    )
+endfunction(add_test_r_selfcompare)
+
 # Run must succeed AND its log must contain LOG_SUBSTRING. For a code path whose answers are
 # not yet worth blessing into a gold file, but which must keep reaching the named behavior.
 function(add_test_log TEST_NAME TEST_EXE LOG_SUBSTRING)
@@ -321,6 +345,13 @@ add_test_r(DogboneAnalytic_MLquad       "remora_exec" "plt_ml_quad00010")
 # 100, ref_ratio = 2). Promote to add_test_r once the 2D contact treatment lands.
 #=============================================================================
 add_test_log(Advection_ML_subcycle      "remora_exec" "with dt = 50")
+
+# The load-bearing one: at a timestep ratio of 1 the recursive driver must reproduce
+# timeStepML, separating a broken refactor from the answer changes subcycling legitimately
+# makes. Keep this passing through every later phase.
+add_test_r_selfcompare(Advection_ML_subcycle_identity "remora_exec" "plt00020"
+                       "amr.do_substep=0"
+                       "amr.do_substep=1 amr.dt_ref_ratio=1")
 
 #=============================================================================
 # High-resolution initialization (remora.hires_grid_level / remora.hires_init_level)

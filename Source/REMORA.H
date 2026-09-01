@@ -1182,9 +1182,9 @@ public:
                         const int N, const amrex::Real dt_lev);
 
     /** \brief Scale RHS momentum variables by 1/cell area, needed before FillPatch to different levels*/
-    void scale_rhs_vars ();
+    void scale_rhs_vars (int lev);
     /** \brief Scale RHS momentum variables by cell area, needed after FillPatch to different levels*/
-    void scale_rhs_vars_inv ();
+    void scale_rhs_vars_inv (int lev);
 
     /** \brief Initialize or calculate surface momentum flux from file or analytic */
     void set_smflux (int lev);
@@ -1460,6 +1460,9 @@ private:
 
     /** \brief report the per-level slow/fast timestep hierarchy; call after ComputeDt */
     void print_timestep_hierarchy () const;
+
+    /** \brief size nsubsteps and set how many steps each level takes per parent step */
+    void set_nsubsteps (int nlevs_max);
 
     /** \brief get plotfile name */
     std::string PlotFileName (int lev) const;
