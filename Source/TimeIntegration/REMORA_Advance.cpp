@@ -57,4 +57,60 @@ REMORA::Advance (int lev, Real time, Real dt_lev, int /*iteration*/, int /*ncycl
     //***************************************************
     advance_3d_ml(lev, dt_lev);
 
+    //***************************************************
+    //Hand the completed step to a finer level. Only timeStep reaches this;
+    //timeStepML registers its own coarse data inline.
+    //***************************************************
+    register_coarse_data(lev, time, dt_lev);
+}
+
+/**
+ * Store this level's old and new state in the coarse/fine fill patchers so the next finer
+ * level can interpolate its contact points to its own sub-times.
+ *
+ * Called at the end of Advance, once the new state is valid. Under subcycling the parent
+ * completes its whole step first, so {t_old, t_new} brackets every time the child asks for
+ * -- REMORAFillPatcher::InterpolateInTime asserts that, catching a child that runs ahead.
+ *
+ * @param[in] lev            level of refinement
+ * @param[in] time           simulation time at start of the step just taken
+ * @param[in] dt_lev         baroclinic time step at level
+ */
+void
+REMORA::register_coarse_data (int lev, Real time, Real dt_lev)
+{
+    if (lev >= finest_level) { return; }
+
+    if (cf_width > 0) {
+        // The parallel copy inside RegisterCoarseData needs filled ghost cells
+        cons_old[lev]->FillBoundary(geom[lev].periodicity());
+        cons_new[lev]->FillBoundary(geom[lev].periodicity());
+        FPr_c[lev].RegisterCoarseData({cons_old[lev], cons_new[lev]}, {time, time + dt_lev});
+    }
+
+    if (cf_width >= 0) {
+        xvel_old[lev]->FillBoundary(geom[lev].periodicity());
+        xvel_new[lev]->FillBoundary(geom[lev].periodicity());
+        FPr_u[lev].RegisterCoarseData({xvel_old[lev], xvel_new[lev]}, {time, time + dt_lev});
+
+        yvel_old[lev]->FillBoundary(geom[lev].periodicity());
+        yvel_new[lev]->FillBoundary(geom[lev].periodicity());
+        FPr_v[lev].RegisterCoarseData({yvel_old[lev], yvel_new[lev]}, {time, time + dt_lev});
+
+        zvel_old[lev]->FillBoundary(geom[lev].periodicity());
+        zvel_new[lev]->FillBoundary(geom[lev].periodicity());
+        FPr_w[lev].RegisterCoarseData({zvel_old[lev], zvel_new[lev]}, {time, time + dt_lev});
+
+        // ubar and vbar carry their time levels as components of one MultiFab, so there is
+        // no old/new pair to register. Registering the end-of-step state at both endpoints
+        // keeps the child's fill inside the asserted bracket, but it is constant in time
+        // and does not conserve mass -- what a child needs is DU_avg2, not ubar.
+        vec_ubar[lev]->FillBoundary(geom[lev].periodicity());
+        FPr_ubar[lev].RegisterCoarseData({vec_ubar[lev].get(), vec_ubar[lev].get()},
+                                         {time, time + dt_lev});
+
+        vec_vbar[lev]->FillBoundary(geom[lev].periodicity());
+        FPr_vbar[lev].RegisterCoarseData({vec_vbar[lev].get(), vec_vbar[lev].get()},
+                                         {time, time + dt_lev});
+    }
 }

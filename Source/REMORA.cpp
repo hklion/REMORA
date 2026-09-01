@@ -281,6 +281,12 @@ REMORA::Evolve ()
     BL_PROFILE_VAR("REMORA::Evolve()",evolve);
     Real cur_time = t_new[0];
 
+    // istep[0] advances inside the loop, so latch the starting value.
+    const int first_step = istep[0];
+
+    // Levels appear as tagging fires, so reprint the hierarchy when finest_level changes.
+    int reported_finest = -1;
+
     // Take one coarse timestep by calling timeStep -- which recursively calls timeStep
     //      for finer levels (with or without subcycling)
     for (int step = istep[0]; step < max_step && cur_time < stop_time; ++step)
@@ -289,11 +295,19 @@ REMORA::Evolve ()
 
         ComputeDt();
 
+        // dt is only populated once ComputeDt has run.
+        if (step == first_step || finest_level != reported_finest) {
+            print_timestep_hierarchy();
+            reported_finest = finest_level;
+        }
+
         int lev = 0;
         int iteration = 1;
         auto dEvolveTime0 = amrex::second();
 
-        if (max_level == 0) {
+        // timeStep recurses into finer levels nsubsteps[lev+1] times. timeStepML is the
+        // path the multi-level gold files were generated against, so keep it unless asked.
+        if (max_level == 0 || do_substep) {
             timeStep(lev, cur_time, iteration);
         }
         else {
@@ -2381,11 +2395,21 @@ REMORA::ReadParameters ()
     {
         ParmParse pp_amr("amr");
         pp_amr.queryAdd("regrid_int", regrid_int);
+        // Advance finer levels nsubsteps[lev] times per parent step instead of in
+        // lockstep. Default 0 keeps the timeStepML path and its answers.
         pp_amr.queryAdd("do_substep", do_substep);
-        if (do_substep) {
-            amrex::Abort("Time substepping is not yet implemented. amr.do_substep must be 0");
+        if (do_substep && max_level > 0) {
+            // timeStepML gives a fine level its 2D contact data by sharing one barotropic
+            // loop with the coarse level, so it never interpolates in time. Subcycling
+            // breaks that and nothing replaces it yet.
+            amrex::Print() << "********************************************************************************" << std::endl;
+            amrex::Print() << "WARNING: amr.do_substep = 1 is under development and does NOT yet couple       " << std::endl;
+            amrex::Print() << "         refined levels correctly. The 2D (barotropic) contact-point treatment  " << std::endl;
+            amrex::Print() << "         and the fine-to-coarse feedback are not implemented, so a multi-level  " << std::endl;
+            amrex::Print() << "         subcycled run will advance finer levels against stale coarse data.     " << std::endl;
+            amrex::Print() << "         Use amr.do_substep = 0 for science runs.                              " << std::endl;
+            amrex::Print() << "********************************************************************************" << std::endl;
         }
-
     }
     solverChoice.init_params(ncons, nscalar, cons_names);
 

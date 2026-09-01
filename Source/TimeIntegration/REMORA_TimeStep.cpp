@@ -42,9 +42,10 @@ REMORA::timeStep (int lev, Real time, int iteration)
                     last_regrid_step[k] = istep[k];
                 }
 
-                // If there are newly created levels, set the time step
+                // If there are newly created levels, set the time step. nsubsteps, not the
+                // refinement ratio: without subcycling every level shares dt[0].
                 for (int k = old_finest+1; k <= finest_level; ++k) {
-                    dt[k] = dt[k-1] / MaxRefRatio(k-1);
+                    dt[k] = dt[k-1] / nsubsteps[k];
                 }
             }
         }

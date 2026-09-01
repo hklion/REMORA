@@ -1,8 +1,63 @@
 #include <REMORA.H>
 
 #include <cmath>
+#include <iomanip>
+#include <sstream>
 
 using namespace amrex;
+
+/**
+ * Report the timestep hierarchy across levels.
+ *
+ * A refined level has two nested ratios: nsubsteps[lev] baroclinic steps per parent step,
+ * each subdivided ndtfast times. ndtfast is shared by all levels, so dtfast = dt/ndtfast
+ * shrinks with dt -- what the barotropic CFL wants, since it picks up the same refinement
+ * factor as the advective limit.
+ *
+ * Nothing else prints the derived hierarchy, and no regression test exercises estTimeStep
+ * (every input sets remora.fixed_dt), so this is the practical check on dt and dtfast.
+ *
+ * Must be called after ComputeDt: dt is seeded to bogus_large_value.
+ */
+void
+REMORA::print_timestep_hierarchy () const
+{
+    // No hierarchy to report, and estTimeStep's verbose output already covers dt.
+    if (max_level == 0) { return; }
+
+    amrex::Print() << "\n Timestep hierarchy"
+                   << "  (amr.do_substep = " << do_substep
+                   << ", remora.ndtfast = " << ndtfast
+                   << ", nfast = " << nfast << ")\n"
+                   << " ==================\n\n"
+                   << "  Level  Ref ratio   Substeps  Fast steps      Slow dt      Fast dt\n"
+                   << "                    per lev-1  per lev-0          (s)          (s)\n";
+
+    // Running product of the substep counts: barotropic work per level-0 step.
+    int cum_substeps = 1;
+
+    for (int lev = 0; lev <= finest_level; ++lev)
+    {
+        cum_substeps *= nsubsteps[lev];
+
+        std::ostringstream ratio;
+        if (lev == 0) {
+            ratio << "---";
+        } else {
+            ratio << ref_ratio[lev-1][0] << " x " << ref_ratio[lev-1][1];
+        }
+
+        amrex::Print() << "  " << std::setw(5) << lev
+                       << "  " << std::setw(9) << ratio.str()
+                       << "  " << std::setw(9) << nsubsteps[lev]
+                       << "  " << std::setw(10) << cum_substeps * ndtfast
+                       << "  " << std::setw(11) << std::fixed << std::setprecision(4) << dt[lev]
+                       << "  " << std::setw(11) << std::fixed << std::setprecision(4)
+                                               << dt[lev] / Real(ndtfast)
+                       << "\n";
+    }
+    amrex::Print() << std::endl;
+}
 
 void
 REMORA::ComputeDt ()

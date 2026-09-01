@@ -655,6 +655,9 @@ public:
     /** \brief advance a single level for a single time step */
     void Advance (int lev, amrex::Real time, amrex::Real dt_lev, int iteration, int ncycle);
 
+    /** \brief register this level's completed step as the coarse bracket for the next finer level */
+    void register_coarse_data (int lev, amrex::Real time, amrex::Real dt_lev);
+
     /** \brief Set everything up for a step on a level */
     void setup_step(int lev, amrex::Real time, amrex::Real dt_lev);
 
@@ -1454,6 +1457,9 @@ private:
 
     /** \brief a wrapper for estTimeStep() */
     void ComputeDt ();
+
+    /** \brief report the per-level slow/fast timestep hierarchy; call after ComputeDt */
+    void print_timestep_hierarchy () const;
 
     /** \brief get plotfile name */
     std::string PlotFileName (int lev) const;

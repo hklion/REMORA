@@ -203,6 +203,27 @@ function(add_test_abort TEST_NAME TEST_EXE ABORT_SUBSTRING)
     )
 endfunction(add_test_abort)
 
+# Run must succeed AND its log must contain LOG_SUBSTRING. For a code path whose answers are
+# not yet worth blessing into a gold file, but which must keep reaching the named behavior.
+function(add_test_log TEST_NAME TEST_EXE LOG_SUBSTRING)
+
+    setup_test()
+
+    resolve_test_exe("${TEST_DIR}" "${TEST_EXE}" TEST_EXE)
+
+    set(test_command sh -c "${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i > ${TEST_NAME}.log 2>&1 && grep -q -- \"${LOG_SUBSTRING}\" ${TEST_NAME}.log")
+
+    add_test(${TEST_NAME} ${test_command})
+    set_tests_properties(${TEST_NAME}
+        PROPERTIES
+        TIMEOUT 600
+        PROCESSORS ${NP}
+        WORKING_DIRECTORY "${CURRENT_TEST_BINARY_DIR}/"
+        LABELS "regression"
+        ATTACHED_FILES_ON_FAIL "${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.log"
+    )
+endfunction(add_test_log)
+
 # Assert variables' min and max in a plotfile against values known from outside REMORA -- a
 # closed-form reference, or constants that an initial condition must reproduce. Unlike a gold
 # file this says what the numbers should BE, so it also catches a baseline that was wrong when
@@ -291,6 +312,15 @@ add_test_r_hitol(BoundaryLayer          "remora_exec" "plt00010")
 add_test_r(DogboneAnalytic              "remora_exec" "plt00010")
 add_test_r(DogboneAnalytic_MLvel        "remora_exec" "plt_ml00010")
 add_test_r(DogboneAnalytic_MLquad       "remora_exec" "plt_ml_quad00010")
+
+#=============================================================================
+# Time subcycling on refined levels (amr.do_substep)
+#
+# The barotropic coarse-to-fine coupling is not done, so these answers get no gold file.
+# This lane keeps the opt-in path running and asserts level 1 receives dt[0]/2 (fixed_dt =
+# 100, ref_ratio = 2). Promote to add_test_r once the 2D contact treatment lands.
+#=============================================================================
+add_test_log(Advection_ML_subcycle      "remora_exec" "with dt = 50")
 
 #=============================================================================
 # High-resolution initialization (remora.hires_grid_level / remora.hires_init_level)
