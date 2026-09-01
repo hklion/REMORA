@@ -1113,6 +1113,12 @@ public:
      * included, by the rule that a coarse cell is land only if all its fine cells are land */
     void coarsen_masks_with_grow_cells (int crse_lev);
 
+    /** \brief Rebuild the u-, v- and psi-point masks from vec_mskr and fill their ghosts */
+    void update_nodal_masks (int lev);
+
+    /** \brief Check a grid file's mask_u and mask_v against the mask_rho product */
+    void verify_file_nodal_masks (int lev);
+
     /** \brief Calculate vertical stretched coordinates */
     void stretch_transform (int lev);
 

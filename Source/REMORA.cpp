@@ -883,7 +883,10 @@ REMORA::set_masks (int lev)
         if (hires_grid_level < 0) {
             if (solverChoice.mask_type == MaskType::analytic) {
                 prob->init_analytic_masks(lev,geom[lev], solverChoice, *this, *vec_mskr[lev]);
-                calculate_nodal_masks(lev);
+                // The analytic hook writes each grid's own cells only, so this is what makes
+                // the mask agree across grid-grid and periodic boundaries.
+                vec_mskr[lev]->FillBoundary(geom[lev].periodicity());
+                update_nodal_masks(lev);
             } else if (solverChoice.mask_type == MaskType::netcdf) {
 #ifdef REMORA_USE_NETCDF
                 amrex::Print() << "Calling init_masks_from_netcdf level " << lev << std::endl;
@@ -901,7 +904,7 @@ REMORA::set_masks (int lev)
             Real dummy_time = zero;
             FillCoarsePatchPC(lev, dummy_time, vec_mskr[lev].get(), vec_mskr[lev-1].get(),
                     foextrap_bc());
-            calculate_nodal_masks(lev);
+            update_nodal_masks(lev);
         } else {
             set_masks_averaged_down(lev);
         }
@@ -921,7 +924,7 @@ REMORA::set_masks_averaged_down (int lev) {
     // is not piecewise constant, so it would put fractional values in a field that the rest
     // of the code compares against 0 and 1 exactly.
     vec_mskr[lev]->FillBoundary(geom[lev].periodicity());
-    calculate_nodal_masks(lev);
+    update_nodal_masks(lev);
 }
 
 /**

@@ -984,7 +984,8 @@ REMORA::update_mskp (int lev)
         Array4<const Real> const& mskr = vec_mskr[lev]->const_array(mfi);
         Array4<      Real> const& mskp = vec_mskp[lev]->array(mfi);
 
-        Box bx = mfi.tilebox(); bx.grow(IntVect(1,1,0)); bx.makeSlab(2,0);
+        // NGROW rings, not one: the stencil reaches mskr(i-1,j-1), and mskr carries NGROW+1.
+        Box bx = mfi.tilebox(); bx.grow(IntVect(NGROW,NGROW,0)); bx.makeSlab(2,0);
 
         Real cff1 = one;
         Real cff2 = two;
@@ -1030,7 +1031,8 @@ REMORA::calculate_nodal_masks (int lev)
         Array4<      Real> const& mskv = vec_mskv[lev]->array(mfi);
         Array4<      Real> const& mskp = vec_mskp[lev]->array(mfi);
 
-        Box bx = mfi.tilebox(); bx.grow(IntVect(1,1,0)); bx.makeSlab(2,0);
+        // NGROW rings, not one: the stencil reaches mskr(i-1,j-1), and mskr carries NGROW+1.
+        Box bx = mfi.tilebox(); bx.grow(IntVect(NGROW,NGROW,0)); bx.makeSlab(2,0);
 
         ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int)
         {
@@ -1038,6 +1040,75 @@ REMORA::calculate_nodal_masks (int lev)
             mskv(i,j,0) = mskr(i  ,j-1,0) * mskr(i,j,0);
             mskp(i,j,0) = mskr(i-1,j-1,0) * mskr(i,j,0) * mskr(i-1,j,0) * mskr(i,j-1,0);
         });
+    }
+}
+
+/**
+ * Rebuild the u-, v- and psi-point masks from vec_mskr and fill their ghost cells.
+ *
+ * The psi mask has two definitions here: the plain product, and ROMS set_masks.F's rule, which
+ * also yields 2 at a free-slip corner. Which one a level got used to depend on how it was
+ * built; keying it off mask_type keeps it uniform across levels.
+ *
+ * @param[in   ] lev    level to operate on
+ */
+void
+REMORA::update_nodal_masks (int lev)
+{
+    calculate_nodal_masks(lev);
+    if (solverChoice.mask_type == MaskType::netcdf) {
+        update_mskp(lev);
+    }
+    vec_msku[lev]->FillBoundary(geom[lev].periodicity());
+    vec_mskv[lev]->FillBoundary(geom[lev].periodicity());
+    vec_mskp[lev]->FillBoundary(geom[lev].periodicity());
+}
+
+/**
+ * Check a grid file's mask_u and mask_v against the mask_rho product ROMS set_masks.F defines.
+ *
+ * Only the level-0 read takes them from a file; every other lane derives them from mask_rho.
+ * Verify the file agrees, so the two cannot disagree about where a face is closed.
+ *
+ * @param[in   ] lev    level to operate on
+ */
+void
+REMORA::verify_file_nodal_masks (int lev)
+{
+    ReduceOps<ReduceOpSum, ReduceOpSum> reduce_op;
+    ReduceData<Long, Long> reduce_data(reduce_op);
+    using ReduceTuple = typename decltype(reduce_data)::Type;
+
+    for ( MFIter mfi(*vec_mskr[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    {
+        Array4<const Real> const& mskr = vec_mskr[lev]->const_array(mfi);
+        Array4<const Real> const& msku = vec_msku[lev]->const_array(mfi);
+        Array4<const Real> const& mskv = vec_mskv[lev]->const_array(mfi);
+
+        Box bx = mfi.tilebox(); bx.makeSlab(2,0);
+
+        reduce_op.eval(bx, reduce_data, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+            -> ReduceTuple
+        {
+            const Real bad_u = amrex::Math::abs(msku(i,j,k) - mskr(i-1,j  ,k) * mskr(i,j,k));
+            const Real bad_v = amrex::Math::abs(mskv(i,j,k) - mskr(i  ,j-1,k) * mskr(i,j,k));
+            return {static_cast<Long>(bad_u > Real(1.0e-12)),
+                    static_cast<Long>(bad_v > Real(1.0e-12))};
+        });
+    }
+
+    ReduceTuple hv = reduce_data.value(reduce_op);
+    Long nbad_u = amrex::get<0>(hv);
+    Long nbad_v = amrex::get<1>(hv);
+    ParallelDescriptor::ReduceLongSum(nbad_u);
+    ParallelDescriptor::ReduceLongSum(nbad_v);
+
+    if (nbad_u > 0 || nbad_v > 0) {
+        amrex::Abort("Land mask on level " + std::to_string(lev) + " is inconsistent: " +
+                     std::to_string(nbad_u) + " mask_u and " + std::to_string(nbad_v) +
+                     " mask_v points differ from the mask_rho product ROMS set_masks.F "
+                     "defines (umask = rmask(i-1,j)*rmask(i,j), vmask likewise). Regenerate "
+                     "the grid file's staggered masks from its mask_rho.");
     }
 }
 
@@ -1052,7 +1123,8 @@ REMORA::fill_3d_masks (int lev)
         Array4<const Real> const& mskr = vec_mskr[lev]->const_array(mfi);
         Array4<      Real> const& mskr3d = vec_mskr3d[lev]->array(mfi);
 
-        Box bx = mfi.tilebox(); bx.grow(IntVect(1,1,0));
+        // No stencil, so this can fill every ring mskr has.
+        Box bx = mfi.tilebox(); bx.grow(IntVect(NGROW+1,NGROW+1,0));
 
         ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k)
         {

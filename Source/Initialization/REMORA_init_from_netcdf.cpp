@@ -785,6 +785,7 @@ REMORA::init_masks_from_netcdf (int lev)
         } // omp
     } // idx
 
+    verify_file_nodal_masks(lev);
     update_mskp(lev);
     vec_mskr[lev]->FillBoundary(geom[lev].periodicity());
     vec_msku[lev]->FillBoundary(geom[lev].periodicity());
