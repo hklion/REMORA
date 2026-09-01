@@ -93,6 +93,11 @@ enum class MaskType {
     none, analytic, netcdf
 };
 
+/** \brief what to do when a level's mask disagrees with the level above it */
+enum class MaskConsistency {
+    abort, warn, ignore
+};
+
 /** \brief harmonic mixing; which surfaces to calculate along */
 enum class HarmonicMixingType {
     s, geopotential
@@ -556,6 +561,18 @@ struct SolverChoice {
             amrex::Abort("Don't know this mask_type");
         }
 
+        static std::string mask_consistency_string = "abort";
+        pp.queryAdd("mask_consistency", mask_consistency_string);
+        if (amrex::toLower(mask_consistency_string) == "abort") {
+            mask_consistency = MaskConsistency::abort;
+        } else if (amrex::toLower(mask_consistency_string) == "warn") {
+            mask_consistency = MaskConsistency::warn;
+        } else if (amrex::toLower(mask_consistency_string) == "ignore") {
+            mask_consistency = MaskConsistency::ignore;
+        } else {
+            amrex::Abort("Don't know this mask_consistency");
+        }
+
         static std::string bottom_stress_type_string = "linear";
         pp.queryAdd("bottom_stress_type", bottom_stress_type_string);
         if (amrex::toLower(bottom_stress_type_string) == "linear") {
@@ -907,6 +924,9 @@ struct SolverChoice {
 
     // Land/sea mask type
     MaskType mask_type;
+
+    // What to do when the land/sea masks on two levels disagree
+    MaskConsistency mask_consistency;
 
     // Mixing type and parameters
     VertMixingType vert_mixing_type;

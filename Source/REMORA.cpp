@@ -441,6 +441,10 @@ REMORA::InitData ()
         restart();
 
     }
+
+    // Every level's mask exists by now, whether built from scratch or read back
+    check_mask_consistency();
+
 #ifdef REMORA_USE_MOAB
     InitMOABMesh();
 #endif
@@ -962,6 +966,195 @@ REMORA::coarsen_masks_with_grow_cells (int crse_lev)
         crsema[box_no](i,j,k,n) = (wet > zero) ? one : zero;
     });
     Gpu::streamSynchronize();
+}
+
+
+/**
+ * Check the land-sea masks for what the rest of the code relies on, reporting according to
+ * remora.mask_consistency (abort by default, or warn, or ignore).
+ *
+ * Per level: masks hold only the values they are meant to, since the plotfile writer decides
+ * what to blank by comparing them against 0 exactly; and no water cell has a non-positive
+ * depth, which stretch_transform turns into quiet garbage rather than a crash.
+ *
+ * Per level pair, over the region the finer level covers: no coarse water point sits over
+ * fine points that are all land, since the wet-only average-down would have nothing to
+ * divide by. Coarsening by "wet if any fine cell is wet" makes that unreachable for cell
+ * centers but not for faces -- a coarse u-face is open whenever both its cells are wet, and
+ * their water can all sit away from the shared plane. Closing it would contradict the
+ * coarsening rule, so the only fix is to move the refined grids.
+ */
+void
+REMORA::check_mask_consistency ()
+{
+    BL_PROFILE("REMORA::check_mask_consistency()");
+    if (solverChoice.mask_type == MaskType::none ||
+        solverChoice.mask_consistency == MaskConsistency::ignore) {
+        return;
+    }
+
+    Long nbad_val = 0, nbad_h = 0, ndry_r = 0, ndry_u = 0, ndry_v = 0, nmissed = 0;
+
+    // Per-level checks
+    for (int lev = 0; lev <= finest_level; ++lev)
+    {
+        ReduceOps<ReduceOpSum, ReduceOpSum> reduce_op;
+        ReduceData<Long, Long> reduce_data(reduce_op);
+        using ReduceTuple = typename decltype(reduce_data)::Type;
+
+        for ( MFIter mfi(*vec_mskr[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi )
+        {
+            Array4<const Real> const& mskr = vec_mskr[lev]->const_array(mfi);
+            Array4<const Real> const& msku = vec_msku[lev]->const_array(mfi);
+            Array4<const Real> const& mskv = vec_mskv[lev]->const_array(mfi);
+            Array4<const Real> const& mskp = vec_mskp[lev]->const_array(mfi);
+            Array4<const Real> const& h    = vec_h[lev]->const_array(mfi);
+
+            Box bx = mfi.tilebox(); bx.makeSlab(2,0);
+
+            reduce_op.eval(bx, reduce_data, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+                -> ReduceTuple
+            {
+                auto is_01 = [] (Real v) {
+                    return v == Real(0.0) || v == Real(1.0);
+                };
+                const bool bad = !is_01(mskr(i,j,k)) || !is_01(msku(i,j,k)) ||
+                                 !is_01(mskv(i,j,k)) ||
+                                 !(is_01(mskp(i,j,k)) || mskp(i,j,k) == Real(2.0));
+                const bool bad_h = (mskr(i,j,k) > Real(0.5)) && (h(i,j,k) <= Real(0.0));
+                return {static_cast<Long>(bad), static_cast<Long>(bad_h)};
+            });
+        }
+        ReduceTuple hv = reduce_data.value(reduce_op);
+        nbad_val += amrex::get<0>(hv);
+        nbad_h   += amrex::get<1>(hv);
+    }
+
+    // Level-pair checks, over the region the finer level covers
+    for (int crse_lev = 0; crse_lev < finest_level; ++crse_lev)
+    {
+        const int flev = crse_lev + 1;
+        const IntVect ratio = refRatio(crse_lev);
+        const BoxArray cba = amrex::coarsen(vec_mskr[flev]->boxArray(), ratio);
+        const DistributionMapping& dmf = vec_mskr[flev]->DistributionMap();
+
+        // Sentinel, so an incomplete copy shows up as itself rather than as a coarse land
+        // point that the checks below would quietly pass over.
+        MultiFab cmskr(cba, dmf, 1, 0);
+        MultiFab cmsku(amrex::convert(cba, IntVect(1,0,0)), dmf, 1, 0);
+        MultiFab cmskv(amrex::convert(cba, IntVect(0,1,0)), dmf, 1, 0);
+        cmskr.setVal(-one); cmsku.setVal(-one); cmskv.setVal(-one);
+        cmskr.ParallelCopy(*vec_mskr[crse_lev], 0, 0, 1);
+        cmsku.ParallelCopy(*vec_msku[crse_lev], 0, 0, 1);
+        cmskv.ParallelCopy(*vec_mskv[crse_lev], 0, 0, 1);
+
+        ReduceOps<ReduceOpSum, ReduceOpSum, ReduceOpSum, ReduceOpSum> reduce_op;
+        ReduceData<Long, Long, Long, Long> reduce_data(reduce_op);
+        using ReduceTuple = typename decltype(reduce_data)::Type;
+
+        for ( MFIter mfi(cmskr, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+        {
+            Array4<const Real> const& cr = cmskr.const_array(mfi);
+            Array4<const Real> const& cu = cmsku.const_array(mfi);
+            Array4<const Real> const& cv = cmskv.const_array(mfi);
+            Array4<const Real> const& fr = vec_mskr[flev]->const_array(mfi);
+            Array4<const Real> const& fu = vec_msku[flev]->const_array(mfi);
+            Array4<const Real> const& fv = vec_mskv[flev]->const_array(mfi);
+
+            Box bx = mfi.tilebox(); bx.makeSlab(2,0);
+            const int rx = ratio[0];
+            const int ry = ratio[1];
+
+            reduce_op.eval(bx, reduce_data, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+                -> ReduceTuple
+            {
+                const int ii = i * rx;
+                const int jj = j * ry;
+
+                // Cell centers: the whole rx by ry block.
+                Real wet_r = zero;
+                for (int jref = 0; jref < ry; ++jref) {
+                    for (int iref = 0; iref < rx; ++iref) {
+                        wet_r += amrex::min(one, fr(ii+iref, jj+jref, k));
+                    }
+                }
+                // Faces: only the fine faces lying in the coarse face's plane.
+                Real wet_u = zero;
+                for (int jref = 0; jref < ry; ++jref) {
+                    wet_u += amrex::min(one, fu(ii, jj+jref, k));
+                }
+                Real wet_v = zero;
+                for (int iref = 0; iref < rx; ++iref) {
+                    wet_v += amrex::min(one, fv(ii+iref, jj, k));
+                }
+
+                const bool missed = cr(i,j,k) < zero;
+                return {static_cast<Long>(missed),
+                        static_cast<Long>(!missed && cr(i,j,k) > Real(0.5) && wet_r == zero),
+                        static_cast<Long>(cu(i,j,k) > Real(0.5) && wet_u == zero),
+                        static_cast<Long>(cv(i,j,k) > Real(0.5) && wet_v == zero)};
+            });
+        }
+        ReduceTuple hv = reduce_data.value(reduce_op);
+        nmissed += amrex::get<0>(hv);
+        ndry_r  += amrex::get<1>(hv);
+        ndry_u  += amrex::get<2>(hv);
+        ndry_v  += amrex::get<3>(hv);
+    }
+
+    ParallelDescriptor::ReduceLongSum(nbad_val);
+    ParallelDescriptor::ReduceLongSum(nbad_h);
+    ParallelDescriptor::ReduceLongSum(nmissed);
+    ParallelDescriptor::ReduceLongSum(ndry_r);
+    ParallelDescriptor::ReduceLongSum(ndry_u);
+    ParallelDescriptor::ReduceLongSum(ndry_v);
+
+    if (nbad_val == 0 && nbad_h == 0 && nmissed == 0 &&
+        ndry_r == 0 && ndry_u == 0 && ndry_v == 0) {
+        if (verbose > 0) {
+            amrex::Print() << "Land-sea masks are consistent across " << finest_level+1
+                           << " level(s)" << std::endl;
+        }
+        return;
+    }
+
+    std::string msg = "Land-sea mask problems:";
+    if (nbad_val > 0) {
+        msg += "\n  " + std::to_string(nbad_val) + " point(s) where a mask is neither 0 nor 1"
+               " (psi may also be 2). The plotfile writer decides what to blank by comparing"
+               " masks against 0 exactly, so a fractional mask silently stops masking.";
+    }
+    if (nbad_h > 0) {
+        msg += "\n  " + std::to_string(nbad_h) + " water point(s) with depth <= 0."
+               " stretch_transform divides by hc + h, so this is quiet garbage rather than a"
+               " crash.";
+    }
+    if (nmissed > 0) {
+        msg += "\n  " + std::to_string(nmissed) + " refined point(s) with no coarse point"
+               " beneath them, which should be impossible under proper nesting.";
+    }
+    if (ndry_r > 0) {
+        msg += "\n  " + std::to_string(ndry_r) + " coarse water cell(s) with only land"
+               " beneath them.";
+    }
+    if (ndry_u > 0 || ndry_v > 0) {
+        msg += "\n  " + std::to_string(ndry_u) + " coarse u-face(s) and " +
+               std::to_string(ndry_v) + " v-face(s) that are open with no open fine face"
+               " beneath them. The coarse grid cannot see a barrier the fine grid resolves."
+               " Closing the coarse face would contradict the coarsening rule, so move the"
+               " refined grids off it or coarsen the mask by hand.";
+    }
+    if (ndry_r > 0 || ndry_u > 0 || ndry_v > 0) {
+        msg += "\nThe two-way average-down divides by the number of wet fine points, so these"
+               " have no value to take.";
+    }
+    msg += "\nSet remora.mask_consistency = warn to continue anyway.";
+
+    if (solverChoice.mask_consistency == MaskConsistency::abort) {
+        amrex::Abort(msg);
+    } else {
+        amrex::Print() << "WARNING: " << msg << std::endl;
+    }
 }
 
 /**
