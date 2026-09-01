@@ -117,14 +117,11 @@ REMORA::MakeNewLevelFromCoarse (int lev, Real time, const BoxArray& ba,
                 BdyVars::null,icomp,false);
     }
 
-    // Not totally sure foextrap is right here
-    FillCoarsePatchPC(lev, time, vec_mskr[lev].get(), vec_mskr[lev-1].get(),
-            foextrap_bc());
-
-    calculate_nodal_masks(lev);
-
-
     set_grid_scale(lev);
+    // After set_grid_scale: an analytic mask reads the grid coordinates it fills. This picks
+    // the same lane level 0 uses, so a level at or below hires_grid_level takes the
+    // high-resolution mask instead of an injection from the coarser level.
+    set_masks(lev);
     stretch_transform(lev);
 
     init_set_vmix(lev);
@@ -297,14 +294,13 @@ REMORA::RemakeLevel (int lev, Real time, const BoxArray& ba, const DistributionM
     t_new[lev] = time;
     t_old[lev] = time - bogus_large_value;
 
-    init_masks(lev, ba, dm);
-    FillCoarsePatchPC(lev, time, vec_mskr[lev].get(), vec_mskr[lev-1].get(),
-            foextrap_bc());
-    calculate_nodal_masks(lev);
-
     init_stuff(lev, ba, dm);
 
     set_grid_scale(lev);
+    // See MakeNewLevelFromCoarse. The init_masks call further up already allocated the masks
+    // on the new BoxArray -- set_bathymetry_averaged_down needs them there -- so this only
+    // has to fill them.
+    set_masks(lev);
     stretch_transform(lev);
 
     init_set_vmix(lev);
