@@ -421,6 +421,7 @@ void REMORA::resize_stuff(int lev)
     vec_z_phys_nd.resize(lev+1);
 
     vec_h_full_domain.resize(hires_grid_level+1);
+    vec_mskr_full_domain.resize(hires_grid_level+1);
 
     vec_h.resize(lev+1);
     vec_Zt_avg1.resize(lev+1);

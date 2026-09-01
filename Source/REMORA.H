@@ -397,6 +397,11 @@ public:
     /** \brief Bathymetry data on the whole domain at each potential level **/
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_h_full_domain;
 
+    /** \brief Land/sea mask at cell centers on the whole domain at each potential level.
+     * Specified at hires_grid_level and coarsened down from there, so that a refined
+     * coastline and the bathymetry it goes with come from the same grid. **/
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_mskr_full_domain;
+
     /** \brief Width of cells in the vertical (z-) direction (3D, Hz in ROMS) */
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_Hz;
     /** \brief u-volume flux (3D) */
@@ -1100,6 +1105,14 @@ public:
     /** \brief Initialize land-sea masks from file or analytic */
     void set_masks (int lev);
 
+    /** \brief Copy this level's land-sea mask out of the full-domain mask that was coarsened
+     * down from hires_grid_level */
+    void set_masks_averaged_down (int lev);
+
+    /** \brief Coarsen the full-domain rho-mask from crse_lev+1 onto crse_lev, grow cells
+     * included, by the rule that a coarse cell is land only if all its fine cells are land */
+    void coarsen_masks_with_grow_cells (int crse_lev);
+
     /** \brief Calculate vertical stretched coordinates */
     void stretch_transform (int lev);
 
@@ -1231,6 +1244,9 @@ public:
     /** \brief Full domain bathymetry data initialization from analytic */
     void init_bathymetry_full_domain_from_analytic ();
 
+    /** \brief Full domain land-sea mask initialization from analytic */
+    void init_masks_full_domain_from_analytic ();
+
     /** \brief Problem initialization from averaged-down high resolution data */
     void set_init_data_averaged_down (int lev);
     /** \brief Problem initialization from NetCDF file */
@@ -1260,6 +1276,8 @@ public:
     void init_bdry_from_netcdf (int lev);
     /** \brief Mask data initialization from NetCDF file */
     void init_masks_from_netcdf (int lev);
+    /** \brief Full domain high-res mask data initialization from NetCDF file */
+    void init_masks_full_domain_from_netcdf ();
     /** \brief Bathymetry data initialization from NetCDF file */
     void init_bathymetry_from_netcdf (int lev);
     /** \brief Full domain high-res bathymetry data initialization from NetCDF file */

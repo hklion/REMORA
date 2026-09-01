@@ -854,29 +854,111 @@ REMORA::set_analytic_vmix(int lev) {
 }
 
 /**
+ * Initialize the land-sea mask on this level.
+ *
+ * This mirrors set_bathymetry: the mask is specified exactly once -- on level 0, or, when a
+ * high-resolution grid covering the entire domain is supplied, at hires_grid_level -- and
+ * every other level is derived from that one specification. No level ever supplies its own
+ * independent mask, so the levels cannot disagree about where the coastline is.
+ *
+ * The hires lane is what lets a refined level carry a better-resolved coastline. It also
+ * closes a gap: with hires_grid_level > 0 the bathymetry already came from the fine grid
+ * while the mask did not, so a run could have high-resolution depths under a coarse
+ * coastline, and needed a level-0 grid file purely to supply that coarse mask.
+ *
  * @param[in   ] lev    level to operate on
  */
 void
-REMORA::set_masks(int lev)
+REMORA::set_masks (int lev)
 {
-    if (solverChoice.mask_type == MaskType::analytic) {
-        prob->init_analytic_masks(lev,geom[lev], solverChoice, *this, *vec_mskr[lev]);
-        calculate_nodal_masks(lev);
-    } else if (solverChoice.mask_type == MaskType::netcdf) {
+    if (solverChoice.mask_type == MaskType::none) {
+        fill_3d_masks(lev);
+        return;
+    }
+
+    if (lev == 0) {
+        // If grid data is not defined on a level > 0 (negative level) then initialize from
+        // the low-resolution grid normally. Otherwise use high-resolution grid data
+        // coarsened down to level 0.
+        if (hires_grid_level < 0) {
+            if (solverChoice.mask_type == MaskType::analytic) {
+                prob->init_analytic_masks(lev,geom[lev], solverChoice, *this, *vec_mskr[lev]);
+                calculate_nodal_masks(lev);
+            } else if (solverChoice.mask_type == MaskType::netcdf) {
 #ifdef REMORA_USE_NETCDF
-        if (lev == 0) {
-            amrex::Print() << "Calling init_masks_from_netcdf level " << lev << std::endl;
-            init_masks_from_netcdf(lev);
-            amrex::Print() << "Masks loaded from netcdf file \n " << std::endl;
+                amrex::Print() << "Calling init_masks_from_netcdf level " << lev << std::endl;
+                init_masks_from_netcdf(lev);
+                amrex::Print() << "Masks loaded from netcdf file \n " << std::endl;
+#endif
+            }
         } else {
+            set_masks_averaged_down(lev);
+        }
+    } else {
+        // If our level is higher than the high resolution grid, interpolate from the level
+        // below. Otherwise, copy over the mask that has been coarsened down.
+        if (lev > hires_grid_level) {
             Real dummy_time = zero;
             FillCoarsePatchPC(lev, dummy_time, vec_mskr[lev].get(), vec_mskr[lev-1].get(),
                     foextrap_bc());
             calculate_nodal_masks(lev);
+        } else {
+            set_masks_averaged_down(lev);
         }
-#endif
     }
     fill_3d_masks(lev);
+}
+
+/**
+ * @param[in   ] lev   level to operate on
+ */
+void
+REMORA::set_masks_averaged_down (int lev) {
+    ParallelCopy(*vec_mskr[lev].get(), *vec_mskr_full_domain[lev].get(), 0, 0, 1,
+            vec_mskr_full_domain[lev]->nGrowVect(),vec_mskr[lev]->nGrowVect());
+    // Deliberately not a FillPatch, unlike the bathymetry and grid-variable analogues: the
+    // interpolation from the coarser level that FillPatch would do for uncovered ghost cells
+    // is not piecewise constant, so it would put fractional values in a field that the rest
+    // of the code compares against 0 and 1 exactly.
+    vec_mskr[lev]->FillBoundary(geom[lev].periodicity());
+    calculate_nodal_masks(lev);
+}
+
+/**
+ * Coarsen the full-domain rho-mask from crse_lev+1 down onto crse_lev, grow cells included,
+ * so that a coarse cell is land only if every one of its fine cells is land.
+ *
+ * This is the counterpart of average_down_with_grow_cells, which cannot be used for a mask:
+ * an arithmetic mean of a partially-wet block gives a fractional value, and the mask has to
+ * stay exactly 0 or 1. Taking "wet if any fine cell is wet" also means the coarse level
+ * never declares land where the fine grid found water, so no water resolved by the fine
+ * grid is lost when the levels are coupled.
+ *
+ * @param[in   ] crse_lev   level to coarsen onto
+ */
+void
+REMORA::coarsen_masks_with_grow_cells (int crse_lev)
+{
+    auto const& crsema = vec_mskr_full_domain[crse_lev]->arrays();
+    auto const& finema = vec_mskr_full_domain[crse_lev+1]->const_arrays();
+    auto ratio = refRatio(crse_lev);
+    // Same grow-cell budget as average_down_with_grow_cells; the mask is cell-centered, so
+    // there is no index-type correction to make.
+    auto nghost_crse = cum_ref_ratios[crse_lev];
+    ParallelFor(*vec_mskr_full_domain[crse_lev], nghost_crse, 1,
+            [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k, int n) noexcept
+    {
+        const int ii = i * ratio[0];
+        const int jj = j * ratio[1];
+        Real wet = zero;
+        for (int jref = 0; jref < ratio[1]; ++jref) {
+            for (int iref = 0; iref < ratio[0]; ++iref) {
+                wet += amrex::min(one, finema[box_no](ii+iref, jj+jref, k, n));
+            }
+        }
+        crsema[box_no](i,j,k,n) = (wet > zero) ? one : zero;
+    });
+    Gpu::streamSynchronize();
 }
 
 /**
@@ -1342,7 +1424,6 @@ REMORA::init_only (int lev, Real time)
     if (solverChoice.ic_type == IC_Type::analytic) {
         set_grid_scale(lev);
     }
-    set_masks(lev);
 
 #ifdef REMORA_USE_NETCDF
     if (solverChoice.ic_type == IC_Type::netcdf) {
@@ -1540,6 +1621,13 @@ REMORA::init_only (int lev, Real time)
         init_grid_vars_full_domain_from_netcdf();
         amrex::Print() << "Done reading in high resolution bathymetry and grid data" << std::endl;
     }
+    // Keyed off mask_type rather than ic_type: the two are set independently, and a netcdf
+    // run may well ask for no mask at all.
+    if (lev==0 and hires_grid_level > 0 and solverChoice.mask_type == MaskType::netcdf) {
+        amrex::Print() << "Reading high resolution land-sea mask" << std::endl;
+        init_masks_full_domain_from_netcdf();
+        amrex::Print() << "Done reading in high resolution land-sea mask" << std::endl;
+    }
     if (lev==0 and hires_init_level > 0 and solverChoice.ic_type == IC_Type::netcdf) {
         amrex::Print() << "Reading high resolution initial data" << std::endl;
         allocate_init_full_domain();
@@ -1573,12 +1661,21 @@ REMORA::init_only (int lev, Real time)
         init_bathymetry_full_domain_from_analytic();
     }
 
+    if (lev==0 and hires_grid_level > 0 and solverChoice.mask_type == MaskType::analytic) {
+        init_masks_full_domain_from_analytic();
+    }
+
     if (lev==0 and hires_init_level > 0 and solverChoice.ic_type == IC_Type::analytic) {
         allocate_init_full_domain();
         init_full_domain_zeta_from_analytic();
     }
 
     set_bathymetry(lev);
+    // Has to follow set_bathymetry, not precede it as it used to: the mask now has a
+    // hires_grid_level lane of its own, which needs the full-domain data read just above,
+    // and an analytic mask needs the grid coordinates that set_bathymetry -> set_grid_scale
+    // fills on the netcdf path.
+    set_masks(lev);
     set_zeta(lev);
     stretch_transform(lev);
 

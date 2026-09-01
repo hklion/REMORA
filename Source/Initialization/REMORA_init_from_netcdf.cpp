@@ -112,6 +112,11 @@ read_grid_vars_full_domain_from_netcdf (const Box& domain, const std::string& fn
                                          FArrayBox& NC_pm_fab, FArrayBox& NC_pn_fab,
                                          IntVect ngrow);
 
+/** \brief helper function to read full-domain high resolution land/sea mask from netcdf */
+void
+read_masks_full_domain_from_netcdf (const Box& domain, const std::string& fname,
+                                    FArrayBox& NC_mskr_fab, IntVect ngrow);
+
 /** \brief helper function to read coriolis factor from netcdf */
 void
 read_coriolis_from_netcdf (int lev, const Box& domain, const std::string& fname, FArrayBox& NC_fcor_fab);
@@ -1139,6 +1144,33 @@ REMORA::init_bathymetry_full_domain_from_netcdf ()
     // grow cells get populated by averaged down fine data
     for (int lev=hires_grid_level-1; lev >= 0; lev--) {
         average_down_with_grow_cells(lev, vec_h_full_domain);;
+    }
+}
+
+void
+REMORA::init_masks_full_domain_from_netcdf ()
+{
+    if (nc_grid_file_hires.empty()) {
+        Abort("Must specify high-resolution grid file when remora.mask_type = netcdf and hires_grid_level > 0");
+    }
+    check_hires_dims_from_netcdf(nc_grid_file_hires, "mask_rho", nc_hires_grid_box,
+                                 cum_ref_ratios[hires_grid_level]);
+
+    Vector<FArrayBox> NC_mskr_fab   ; NC_mskr_fab.resize(1);
+    read_masks_full_domain_from_netcdf(nc_hires_grid_box, nc_grid_file_hires, NC_mskr_fab[0],
+                                       cum_ref_ratios[hires_grid_level]);
+
+    // Don't tile this since we are operating on full FABs in this routine
+    for ( MFIter mfi(*vec_mskr_full_domain[hires_grid_level], false); mfi.isValid(); ++mfi )
+    {
+        FArrayBox &mskr_fab  = (*vec_mskr_full_domain[hires_grid_level])[mfi];
+        mskr_fab.template    copy<RunOn::Device>(NC_mskr_fab[0]);
+    }
+
+    // Coarsen to fill the levels below hires_grid_level. Not average_down_with_grow_cells:
+    // a mask has to stay exactly 0 or 1, so this takes "wet if any fine cell is wet".
+    for (int lev=hires_grid_level-1; lev >= 0; lev--) {
+        coarsen_masks_with_grow_cells(lev);
     }
 }
 

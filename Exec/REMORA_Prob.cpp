@@ -341,10 +341,10 @@ void Problem::init_analytic_grid_scale (
 }
 
 void Problem::init_analytic_masks(
-        int lev,
-        const amrex::Geometry& /*geom*/,
+        int /*lev*/,
+        const amrex::Geometry& geom,
         SolverChoice const& /*m_solverChoice*/,
-        REMORA const& remora,
+        REMORA const& /*remora*/,
         MultiFab& mf_mskr)
 {
     ParmParse pp("remora");
