@@ -353,6 +353,11 @@ add_test_r_selfcompare(Advection_ML_subcycle_identity "remora_exec" "plt00020"
                        "amr.do_substep=0"
                        "amr.do_substep=1 remora.dt_ref_ratio=1")
 
+# Advection has a flat bottom, so D matches across the interface and set_2d_cf_bcs reduces to
+# the interpolation it replaces. This lane has varying bathymetry and a refinement ratio of 3,
+# so the mass-flux form is actually exercised.
+add_test_log(DogboneAnalytic_ML_subcycle "remora_exec" "3 x 3          3          60       0.6667")
+
 #=============================================================================
 # High-resolution initialization (remora.hires_grid_level / remora.hires_init_level)
 #

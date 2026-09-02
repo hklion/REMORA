@@ -782,12 +782,19 @@ REMORA::advance_2d (int lev,
         MultiFab ubar_know(*vec_ubar[lev], make_alias, know, 1);
         MultiFab vbar_know(*vec_vbar[lev], make_alias, know, 1);
         MultiFab zeta_know(*vec_zeta[lev], make_alias, know, 1);
+
         FillPatch(lev, t_old[lev], *vec_ubar[lev], GetVecOfPtrs(vec_ubar), ubar_bc(), bdy_ubar(),
                   knew, false,true, 0,know, dt2d, ubar_know);
         FillPatch(lev, t_old[lev], *vec_vbar[lev], GetVecOfPtrs(vec_vbar), vbar_bc(), bdy_vbar(),
                   knew, false,true, 0,know, dt2d, vbar_know);
         FillPatch(lev, t_old[lev], *vec_zeta[lev], GetVecOfPtrs(vec_zeta), zeta_bc(), bdy_zeta(),
                   knew, false,false, 0,know, dt2d, zeta_know);
+
+        // Replace the interface faces the FillPatchers just set from the parent's ubar with
+        // the parent's mass flux, which conserves mass. Must follow the FillPatch.
+        if (do_substep) {
+            set_2d_cf_bcs(lev, t_old[lev], know, knew);
+        }
 
 #ifdef REMORA_USE_NETCDF
         if (solverChoice.do_rivers) {

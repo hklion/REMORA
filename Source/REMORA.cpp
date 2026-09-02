@@ -577,6 +577,13 @@ REMORA::Construct_REMORAFillPatchers (int lev)
     FPr_vbar.emplace_back(convert(ba2d_fine, IntVect(0,1,0)), dm_fine, geom[lev]  ,
                        convert(ba2d_crse, IntVect(0,1,0)), dm_crse, geom[lev-1],
                        -cf_width, -cf_set_width, 3, &face_cons_linear_interp);
+
+    FPr_Dubar.emplace_back(convert(ba2d_fine, IntVect(1,0,0)), dm_fine, geom[lev]  ,
+                       convert(ba2d_crse, IntVect(1,0,0)), dm_crse, geom[lev-1],
+                       -cf_width, -cf_set_width, 1, &face_cons_linear_interp);
+    FPr_Dvbar.emplace_back(convert(ba2d_fine, IntVect(0,1,0)), dm_fine, geom[lev]  ,
+                       convert(ba2d_crse, IntVect(0,1,0)), dm_crse, geom[lev-1],
+                       -cf_width, -cf_set_width, 1, &face_cons_linear_interp);
 }
 
 /**
@@ -627,6 +634,13 @@ REMORA::Define_REMORAFillPatchers (int lev)
     FPr_vbar[lev-1].Define(convert(ba2d_fine, IntVect(0,1,0)), dm_fine, geom[lev]  ,
                         convert(ba2d_crse, IntVect(0,1,0)), dm_crse, geom[lev-1],
                         -cf_width, -cf_set_width, 3, &face_cons_linear_interp);
+
+    FPr_Dubar[lev-1].Define(convert(ba2d_fine, IntVect(1,0,0)), dm_fine, geom[lev]  ,
+                        convert(ba2d_crse, IntVect(1,0,0)), dm_crse, geom[lev-1],
+                        -cf_width, -cf_set_width, 1, &face_cons_linear_interp);
+    FPr_Dvbar[lev-1].Define(convert(ba2d_fine, IntVect(0,1,0)), dm_fine, geom[lev]  ,
+                        convert(ba2d_crse, IntVect(0,1,0)), dm_crse, geom[lev-1],
+                        -cf_width, -cf_set_width, 1, &face_cons_linear_interp);
 }
 
 void
@@ -2197,6 +2211,9 @@ REMORA::ReadParameters ()
     }
     // Number of barotropic (fast) steps taken per baroclinic (slow) step.
     pp.queryAdd("ndtfast", ndtfast);
+
+    // See set_2d_cf_bcs. Only has an effect when amr.do_substep = 1.
+    pp.queryAdd("time_interp_flux", time_interp_flux);
 
     // Advance and timeStepML form the fast step as dt / ndtfast, and set_weights sizes
     // the barotropic filter with the same number, so a non-positive value divides by zero

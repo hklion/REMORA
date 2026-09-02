@@ -539,6 +539,15 @@ public:
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_DV_avg1;
     /** \brief correct time average of barotropic y velocity flux for coupling (2D) */
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_DV_avg2;
+    /** \brief DU_avg2 per unit cell edge length, at the start and end of this level's step.
+     *         What a subcycled finer level interpolates to get a mass-conserving ubar (2D) */
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_Dubar_old;
+    /** \brief see vec_Dubar_old (2D) */
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_Dubar_new;
+    /** \brief DV_avg2 per unit cell edge length, see vec_Dubar_old (2D) */
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_Dvbar_old;
+    /** \brief see vec_Dvbar_old (2D) */
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_Dvbar_new;
     /** \brief barotropic x velocity for the RHS (2D) */
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_rubar;
     /** \brief barotropic y velocity for the RHS (2D) */
@@ -657,6 +666,12 @@ public:
 
     /** \brief register this level's completed step as the coarse bracket for the next finer level */
     void register_coarse_data (int lev, amrex::Real time, amrex::Real dt_lev);
+
+    /** \brief set this level's barotropic contact points from its parent, mass-conservingly */
+    void set_2d_cf_bcs (int lev, amrex::Real time, int know, int knew);
+
+    /** \brief store this level's barotropic mass flux per unit cell edge length */
+    void store_2d_flux (int lev);
 
     /** \brief Set everything up for a step on a level */
     void setup_step(int lev, amrex::Real time, amrex::Real dt_lev);
@@ -1581,6 +1596,10 @@ private:
     amrex::Vector<REMORAFillPatcher> FPr_ubar;
     /** \brief Vector over levels of FillPatchers for vbar (2D) */
     amrex::Vector<REMORAFillPatcher> FPr_vbar;
+    /** \brief Vector over levels of FillPatchers for Dubar (2D) */
+    amrex::Vector<REMORAFillPatcher> FPr_Dubar;
+    /** \brief Vector over levels of FillPatchers for Dvbar (2D) */
+    amrex::Vector<REMORAFillPatcher> FPr_Dvbar;
 
     /** \brief write checkpoint file to disk */
     void WriteCheckpointFile ();
@@ -1738,6 +1757,10 @@ private:
 
     /** \brief Whether to substep fine levels in time */
     int do_substep = 0;
+
+    /** \brief interpolate the parent's barotropic mass flux in time at the coarse-fine
+     *         interface, rather than holding its step average. Off matches ROMS. */
+    bool time_interp_flux = false;
 
     /** \brief how often each level regrids the higher levels of refinement (after a level advances that many time steps) */
     int regrid_int = 2;
