@@ -411,6 +411,10 @@ Notes
    spatial refinement ratio but need not equal it. Setting it to 1 advances every level with the
    level-0 time step, which is how the sub-stepped driver is compared against the lockstep one.
 
+-  **remora.do_reflux** (default 1) corrects the coarse tracer with the finer level's
+   accumulated advective flux at their interface. It needs **amr.do_substep** = 1 and
+   **remora.coupling_type** = TwoWay to have any effect.
+
 .. _examples-of-usage-3:
 
 Examples of Usage

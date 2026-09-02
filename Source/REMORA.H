@@ -841,7 +841,9 @@ public:
                    const amrex::Array4<amrex::Real const>& mskv,
                    const amrex::Array4<int         const>& river_pos,
                    const amrex::Array4<amrex::Real const>& river_source,
-                   int nrhs, int nnew, int N, const amrex::Real dt_lev);
+                   int nrhs, int nnew, int N, const amrex::Real dt_lev,
+                   const amrex::Array4<amrex::Real>& fx_reg = amrex::Array4<amrex::Real>(),
+                   const amrex::Array4<amrex::Real>& fy_reg = amrex::Array4<amrex::Real>());
 
     /** \brief RHS terms for 3D momentum */
     void rhs_uv_3d (int lev,
@@ -1653,6 +1655,12 @@ private:
     /** \brief array of flux registers for refluxing in multilevel */
     amrex::Vector<std::unique_ptr<amrex::YAFluxRegister>> advflux_reg;
 
+    /** \brief flux register between lev and lev-1 */
+    amrex::YAFluxRegister* getAdvFluxReg (int lev) { return advflux_reg[lev].get(); }
+
+    /** \brief build or rebuild the flux register between lev and lev-1 */
+    void define_flux_register (int lev);
+
     ////////////////
     // boundary data members
 
@@ -1765,6 +1773,11 @@ private:
     /** \brief interpolate the parent's barotropic mass flux in time at the coarse-fine
      *         interface, rather than holding its step average. Off matches ROMS. */
     bool time_interp_flux = false;
+
+    /** \brief correct the coarse tracer with the finer level's accumulated advective flux
+     *         at their interface. Only has an effect under amr.do_substep with two-way
+     *         coupling. */
+    int do_reflux = 1;
 
     /** \brief how often each level regrids the higher levels of refinement (after a level advances that many time steps) */
     int regrid_int = 2;

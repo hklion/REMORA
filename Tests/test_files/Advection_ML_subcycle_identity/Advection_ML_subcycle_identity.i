@@ -17,6 +17,11 @@
 # replaces. On varying bathymetry the two differ and ratio 1 would no longer match lockstep --
 # correctly, since the 2D coupling is then genuinely different. See DogboneAnalytic_ML_subcycle.
 #
+# Refluxing is not degenerate here and is switched off in the comparison: it is a correction
+# the lockstep driver never applies, so leaving it on would test a feature rather than the
+# drivers. It moves the tracer by 3e-4, and only the tracer -- temp and salt are uniform, so
+# their flux mismatch across the interface is zero.
+#
 remora.prob_name = Advection
 
 remora.max_step = 20

@@ -395,8 +395,36 @@ REMORA::post_timestep (int nstep, Real time, Real dt_lev0)
     {
         for (int lev = finest_level-1; lev >= 0; lev--)
         {
-            // This call refluxes from the lev/lev+1 interface onto lev
-            //getAdvFluxReg(lev+1)->Reflux(*cons_new[lev], 0, 0, NCONS);
+            // This call refluxes from the lev/lev+1 interface onto lev. The register holds
+            // the correction in Hz*t units, the form the tracer is advanced in, so weight
+            // by Hz across the call and divide back out afterwards.
+            if (do_reflux && do_substep) {
+                // Hz has one component and the tracers have ncons, so scale by hand. Cells
+                // with no thickness are land or dry: leave them rather than divide by zero.
+                auto scale_by_Hz = [&] (bool invert)
+                {
+#ifdef _OPENMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+                    for (MFIter mfi(*cons_new[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi)
+                    {
+                        Array4<Real      > const& c  = cons_new[lev]->array(mfi);
+                        Array4<Real const> const& hz = vec_Hz[lev]->const_array(mfi);
+                        ParallelFor(mfi.tilebox(), ncons,
+                        [=] AMREX_GPU_DEVICE (int i, int j, int k, int n)
+                        {
+                            if (hz(i,j,k) > zero) {
+                                c(i,j,k,n) = invert ? c(i,j,k,n) / hz(i,j,k)
+                                                    : c(i,j,k,n) * hz(i,j,k);
+                            }
+                        });
+                    }
+                };
+
+                scale_by_Hz(false);
+                getAdvFluxReg(lev+1)->Reflux(*cons_new[lev], 0, 0, ncons);
+                scale_by_Hz(true);
+            }
 
             // We need to do this before anything else because refluxing changes the
             // values of coarse cells underneath fine grids with the assumption they'll
@@ -461,15 +489,11 @@ REMORA::InitData ()
 #ifdef REMORA_USE_MOAB
     InitMOABMesh();
 #endif
-    // Initialize flux registers (whether we start from scratch or restart)
+    // Levels that appear later, or are regridded, define their own from make_new_level.
     if (solverChoice.coupling_type == CouplingType::two_way) {
         advflux_reg[0] = nullptr;
-        for (int lev = 1; lev <= finest_level; lev++)
-        {
-            advflux_reg[lev].reset( new YAFluxRegister(grids[lev], grids[lev-1],
-                                                   dmap[lev],  dmap[lev-1],
-                                                   geom[lev],  geom[lev-1],
-                                              ref_ratio[lev-1], lev, ncons));
+        for (int lev = 1; lev <= finest_level; lev++) {
+            define_flux_register(lev);
         }
     }
 
@@ -2217,6 +2241,10 @@ REMORA::ReadParameters ()
     // See set_2d_cf_bcs. Only has an effect when amr.do_substep = 1.
     pp.queryAdd("time_interp_flux", time_interp_flux);
 
+    // Tracer flux correction at the coarse-fine interface. Needs amr.do_substep and
+    // two-way coupling to do anything.
+    pp.queryAdd("do_reflux", do_reflux);
+
     // Advance and timeStepML form the fast step as dt / ndtfast, and set_weights sizes
     // the barotropic filter with the same number, so a non-positive value divides by zero
     // at all three sites. Nothing can infer it: dt is not known until run time on a
@@ -2489,6 +2517,29 @@ REMORA::clear_avgdown_masks (int lev)
             vec_mskv_crse_on_fine[crse_lev].reset();
         }
     }
+}
+
+/**
+ * Build the flux register holding the tracer flux mismatch between lev and lev-1.
+ *
+ * Called whenever a level is created or its grids change, not once at startup: a level that
+ * first appears mid-run through tagging would otherwise have no register.
+ *
+ * @param[in   ] lev  level of refinement, > 0
+ */
+void
+REMORA::define_flux_register (int lev)
+{
+    if (lev == 0 || solverChoice.coupling_type != CouplingType::two_way) { return; }
+
+    // Take the layout from the MultiFabs rather than grids/dmap: when a level is first
+    // created those have not been set on AmrCore yet, as the fill patchers here also assume.
+    advflux_reg[lev].reset( new YAFluxRegister(cons_new[lev  ]->boxArray(),
+                                               cons_new[lev-1]->boxArray(),
+                                               cons_new[lev  ]->DistributionMap(),
+                                               cons_new[lev-1]->DistributionMap(),
+                                               geom[lev], geom[lev-1],
+                                               ref_ratio[lev-1], lev, ncons));
 }
 
 /**

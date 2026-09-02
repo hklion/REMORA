@@ -349,9 +349,12 @@ add_test_log(Advection_ML_subcycle      "remora_exec" "with dt = 50")
 # The load-bearing one: at a timestep ratio of 1 the recursive driver must reproduce
 # timeStepML, separating a broken refactor from the answer changes subcycling legitimately
 # makes. Keep this passing through every later phase.
+# do_reflux is off in the subcycled run because it is a correction the lockstep driver does
+# not apply at all, so leaving it on would compare a feature rather than the drivers. It
+# moves the tracer by 3e-4 here, well clear of the tolerance.
 add_test_r_selfcompare(Advection_ML_subcycle_identity "remora_exec" "plt00020"
                        "amr.do_substep=0"
-                       "amr.do_substep=1 remora.dt_ref_ratio=1")
+                       "amr.do_substep=1 remora.dt_ref_ratio=1 remora.do_reflux=0")
 
 # Advection has a flat bottom, so D matches across the interface and set_2d_cf_bcs reduces to
 # the interpolation it replaces. This lane has varying bathymetry and a refinement ratio of 3,

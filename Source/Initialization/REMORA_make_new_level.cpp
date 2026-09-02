@@ -145,6 +145,7 @@ REMORA::MakeNewLevelFromCoarse (int lev, Real time, const BoxArray& ba,
         Construct_REMORAFillPatchers(lev);
            Define_REMORAFillPatchers(lev);
     }
+    define_flux_register(lev);
 
 #ifdef REMORA_USE_PARTICLES
     // particleData.Redistribute();
@@ -321,6 +322,7 @@ REMORA::RemakeLevel (int lev, Real time, const BoxArray& ba, const DistributionM
         bool dm_changed = (dm != dm_old);
         if (ba_changed || dm_changed) {
           Define_REMORAFillPatchers(lev);
+          define_flux_register(lev);
         }
     }
 

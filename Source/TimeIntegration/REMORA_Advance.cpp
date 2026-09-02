@@ -18,6 +18,13 @@ REMORA::Advance (int lev, Real time, Real dt_lev, int /*iteration*/, int /*ncycl
 {
     BL_PROFILE("REMORA::Advance()");
 
+    // Start this level's contribution to the correction its children will apply. Must come
+    // before the coarse fluxes are added, and before any child substep adds its own.
+    if (do_reflux && do_substep && lev < finest_level &&
+        solverChoice.coupling_type == CouplingType::two_way) {
+        getAdvFluxReg(lev+1)->reset();
+    }
+
     setup_step(lev, time, dt_lev);
 
     int nfast_counter=nfast + 1;
