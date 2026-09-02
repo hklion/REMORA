@@ -403,9 +403,10 @@ Notes
 -  **amr.max_grid_size** must be a multiple of **amr.blocking_factor**
    at every level
 
--  **amr.do_substep** is under development. The recursive driver and the per-level time step
-   hierarchy work, but the coarse-to-fine coupling of the 2D (barotropic) mode does not yet, so a
-   refined level is advanced against stale boundary data. Use the default of 0 for science runs.
+-  **amr.do_substep** is implemented but not yet validated. The coarse-to-fine coupling, the
+   fine-to-coarse feedback and the tracer flux correction are all in place, but the free surface
+   is not set at the contact points and no test checks conservation across the interface. Use the
+   default of 0 for science runs until that is settled.
 
 -  **remora.dt_ref_ratio** only has an effect when **amr.do_substep** = 1. It defaults to the
    spatial refinement ratio but need not equal it. Setting it to 1 advances every level with the

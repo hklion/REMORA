@@ -2440,15 +2440,13 @@ REMORA::ReadParameters ()
         // lockstep. Default 0 keeps the timeStepML path and its answers.
         pp_amr.queryAdd("do_substep", do_substep);
         if (do_substep && max_level > 0) {
-            // timeStepML gives a fine level its 2D contact data by sharing one barotropic
-            // loop with the coarse level, so it never interpolates in time. Subcycling
-            // breaks that and nothing replaces it yet.
+            // The coupling is in place now; what is missing is validation and the free
+            // surface at the contact points, which needs a nonzero cf_set_width.
             amrex::Print() << "********************************************************************************" << std::endl;
-            amrex::Print() << "WARNING: amr.do_substep = 1 is under development and does NOT yet couple       " << std::endl;
-            amrex::Print() << "         refined levels correctly. The 2D (barotropic) contact-point treatment  " << std::endl;
-            amrex::Print() << "         and the fine-to-coarse feedback are not implemented, so a multi-level  " << std::endl;
-            amrex::Print() << "         subcycled run will advance finer levels against stale coarse data.     " << std::endl;
-            amrex::Print() << "         Use amr.do_substep = 0 for science runs.                              " << std::endl;
+            amrex::Print() << "WARNING: amr.do_substep = 1 is not yet validated for science runs. The coarse-  " << std::endl;
+            amrex::Print() << "         to-fine coupling, the fine-to-coarse feedback and the tracer flux      " << std::endl;
+            amrex::Print() << "         correction are all implemented, but zeta is not set at the contact     " << std::endl;
+            amrex::Print() << "         points, and no test checks conservation across the interface.          " << std::endl;
             amrex::Print() << "********************************************************************************" << std::endl;
         }
     }
