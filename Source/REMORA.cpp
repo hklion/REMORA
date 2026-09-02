@@ -117,6 +117,7 @@ REMORA::REMORA ()
     int nlevs_max = max_level + 1;
 
     istep.resize(nlevs_max, 0);
+    last_2d_knew.resize(nlevs_max, 0);
     set_nsubsteps(nlevs_max);
 
     physbcs.resize(nlevs_max);
@@ -178,6 +179,7 @@ REMORA::REMORA (const amrex::RealBox& rb, int max_level_in, const amrex::Vector<
     int nlevs_max = max_level + 1;
 
     istep.resize(nlevs_max, 0);
+    last_2d_knew.resize(nlevs_max, 0);
     set_nsubsteps(nlevs_max);
 
     physbcs.resize(nlevs_max);
@@ -2597,6 +2599,31 @@ REMORA::AverageDownTo (int crse_lev)
                         *vec_mskv[flev], cmskv, 1, 1);
     average_down_masked(crse_lev, *zvel_new[flev], *zvel_new[crse_lev],
                         *vec_mskr[flev], cmskr, 1, 2);
+
+    // ROMS's fine2coarse replaces the coarse 2D state, not just the free surface average.
+    // Without it a child drifts from its parent over nsubsteps steps with nothing pulling
+    // it back. Gated: the lockstep answers were blessed without it.
+    if (do_substep) {
+        // update_massflux_3d has just set components 0 and 1 of both to the same
+        // vertically integrated velocity, so these two are index-safe to average.
+        for (int icomp = 0; icomp < 2; ++icomp) {
+            MultiFab ubar_f(*vec_ubar[crse_lev+1], make_alias, icomp, 1);
+            MultiFab ubar_c(*vec_ubar[crse_lev  ], make_alias, icomp, 1);
+            average_down_faces(ubar_f, ubar_c, refRatio(crse_lev), 0);
+
+            MultiFab vbar_f(*vec_vbar[crse_lev+1], make_alias, icomp, 1);
+            MultiFab vbar_c(*vec_vbar[crse_lev  ], make_alias, icomp, 1);
+            average_down_faces(vbar_f, vbar_c, refRatio(crse_lev), 0);
+        }
+
+        // zeta keeps a leapfrog history, and the two levels need not agree on which
+        // component is newest, so map one onto the other as ROMS does with its Dindex2d
+        // and Rindex2d (nesting.F). The two indices happen to coincide in the cases tested
+        // so far, which means the mapping itself is not yet exercised.
+        MultiFab zeta_f(*vec_zeta[crse_lev+1], make_alias, last_2d_knew[crse_lev+1], 1);
+        MultiFab zeta_c(*vec_zeta[crse_lev  ], make_alias, last_2d_knew[crse_lev  ], 1);
+        average_down(zeta_f, zeta_c, 0, 1, refRatio(crse_lev));
+    }
 
     stretch_transform(crse_lev);
 }
