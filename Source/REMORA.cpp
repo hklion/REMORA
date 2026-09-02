@@ -2440,13 +2440,13 @@ REMORA::ReadParameters ()
         // lockstep. Default 0 keeps the timeStepML path and its answers.
         pp_amr.queryAdd("do_substep", do_substep);
         if (do_substep && max_level > 0) {
-            // The coupling is in place now; what is missing is validation and the free
-            // surface at the contact points, which needs a nonzero cf_set_width.
+            // The coupling is in place; what is missing is validation.
             amrex::Print() << "********************************************************************************" << std::endl;
             amrex::Print() << "WARNING: amr.do_substep = 1 is not yet validated for science runs. The coarse-  " << std::endl;
             amrex::Print() << "         to-fine coupling, the fine-to-coarse feedback and the tracer flux      " << std::endl;
-            amrex::Print() << "         correction are all implemented, but zeta is not set at the contact     " << std::endl;
-            amrex::Print() << "         points, and no test checks conservation across the interface.          " << std::endl;
+            amrex::Print() << "         correction are all implemented, but no test checks conservation across " << std::endl;
+            amrex::Print() << "         the interface, and the free surface at the contact points is taken     " << std::endl;
+            amrex::Print() << "         from the parent's instantaneous state rather than a fast-time average. " << std::endl;
             amrex::Print() << "********************************************************************************" << std::endl;
         }
     }

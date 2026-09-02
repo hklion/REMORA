@@ -404,9 +404,10 @@ Notes
    at every level
 
 -  **amr.do_substep** is implemented but not yet validated. The coarse-to-fine coupling, the
-   fine-to-coarse feedback and the tracer flux correction are all in place, but the free surface
-   is not set at the contact points and no test checks conservation across the interface. Use the
-   default of 0 for science runs until that is settled.
+   fine-to-coarse feedback and the tracer flux correction are all in place, but no test checks
+   conservation across the interface, and the free surface at the contact points is interpolated
+   from the parent's instantaneous state rather than a fast-time average. Use the default of 0 for
+   science runs until that is settled.
 
 -  **remora.dt_ref_ratio** only has an effect when **amr.do_substep** = 1. It defaults to the
    spatial refinement ratio but need not equal it. Setting it to 1 advances every level with the
