@@ -444,6 +444,9 @@ REMORA::advance_3d (int lev, MultiFab& mf_cons,
             if (lev > 0) {
                 getAdvFluxReg(lev)->FineAdd(mfi, flux, dx, dt_lev, RunOn::Device);
             }
+            // The flux FABs are temporaries scoped to this tile, so don't move on until the
+            // register has finished reading them. ERF does the same at its own CrseAdd.
+            Gpu::streamSynchronize();
         }
     } // mfi
 
