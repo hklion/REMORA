@@ -236,7 +236,7 @@ function(add_test_0 TEST_NAME TEST_EXE PLTFILE)
 
     set(FCOMPARE_TOLERANCE "-r 1e-14 --abs_tol 1.0e-14")
     set(FCOMPARE_FLAGS "-a ${FCOMPARE_TOLERANCE}")
-    set(test_command sh -c "${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i erf.input_sounding_file=${CURRENT_TEST_BINARY_DIR}/input_sounding ${RUNTIME_OPTIONS} > ${TEST_NAME}.log && ${FCOMPARE_EXE} ${FCOMPARE_FLAGS} ${CURRENT_TEST_BINARY_DIR}/plt00000 ${CURRENT_TEST_BINARY_DIR}/${PLTFILE}")
+    set(test_command sh -c "${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i ${RUNTIME_OPTIONS} > ${TEST_NAME}.log && ${FCOMPARE_EXE} ${FCOMPARE_FLAGS} ${CURRENT_TEST_BINARY_DIR}/plt00000 ${CURRENT_TEST_BINARY_DIR}/${PLTFILE}")
 
     add_test(${TEST_NAME} ${test_command})
     set_tests_properties(${TEST_NAME}
@@ -304,6 +304,13 @@ add_test_r(DogboneAnalytic_MLquad       "remora_exec" "plt_ml_quad00010")
 
 add_test_r_gold(Channel_Test_hires       "remora_exec" "plt00010"    Channel_Test)
 add_test_r_gold(DogboneAnalytic_MLhires  "remora_exec" "plt_ml00010" DogboneAnalytic_MLvel)
+
+# The only lanes with a partially-masked coarse cell. Their exact solution is rest, so
+# they need no gold file: plt00010 must equal plt00000. A plain arithmetic average-down
+# lets the zeroed fine land cells drag those coarse cells off their initial value, which
+# breaks stationarity by ~1e-2 in salt and velocity.
+add_test_0(DogboneAnalytic_MLmask       "remora_exec" "plt00010")
+add_test_0(DogboneAnalytic_MLmask_rr2   "remora_exec" "plt00010")
 add_test_r_differ(Seamount_hires         "remora_exec" "plt00010"    Seamount)
 add_test_r_differ(Seamount_hires_r4      "remora_exec" "plt00010"    Seamount_hires)
 

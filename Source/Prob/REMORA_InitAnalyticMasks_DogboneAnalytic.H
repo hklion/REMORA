@@ -6,6 +6,19 @@
     const Real dx = geom.CellSize(0);
     const Real dy = geom.CellSize(1);
 
+    // Defaults put the coast on coarse cell faces at every refinement ratio the tests use,
+    // so every block is entirely land or entirely water. Moving y_lo/y_hi off a coarse face
+    // is what produces a partially-masked coarse cell.
+    ParmParse pp_mask("remora.prob");
+    Real mask_x_lo = Real(2800.0);
+    Real mask_x_hi = Real(5600.0);
+    Real mask_y_lo = Real(250.0);
+    Real mask_y_hi = Real(500.0);
+    pp_mask.query("mask_x_lo", mask_x_lo);
+    pp_mask.query("mask_x_hi", mask_x_hi);
+    pp_mask.query("mask_y_lo", mask_y_lo);
+    pp_mask.query("mask_y_hi", mask_y_hi);
+
     for (MFIter mfi(mf_mskr, TilingIfNotGPU()); mfi.isValid(); ++mfi)
     {
         // Every grow cell, not just NGROW of them: the full-domain array carries as many as
@@ -20,8 +33,8 @@
         {
             const Real x_r = (i + Real(0.5)) * dx;
             const Real y_r = (j + Real(0.5)) * dy;
-            if ((x_r > Real(2800.0) && x_r < Real(5600.0)) &&
-                (y_r < Real(250.0) || y_r > Real(500.0))) {
+            if ((x_r > mask_x_lo && x_r < mask_x_hi) &&
+                (y_r < mask_y_lo || y_r > mask_y_hi)) {
                 mskr(i,j,0) = zero;
             }
         });
