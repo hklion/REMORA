@@ -83,6 +83,11 @@ REMORA::store_2d_flux (int lev)
  * level and the barotropic solver rewrites them. What is held constant over the step is the
  * flux, not the act of imposing it.
  *
+ * Only momentum needs this. The free surface is already handled: setup_step calls
+ * set_zeta_to_Ztavg, which sets all three zeta components to Zt_avg1 over the grown box at the
+ * top of every baroclinic step, so the zeta a finer level interpolates at its contact points is
+ * the parent's fast-time average. ROMS does the same, with set_zeta ahead of put_refine2d.
+ *
  * @param[in] lev            level of refinement
  * @param[in] time           simulation time to interpolate the parent's flux to
  * @param[in] know           zeta time component holding the current free surface

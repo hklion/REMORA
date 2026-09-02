@@ -2445,8 +2445,7 @@ REMORA::ReadParameters ()
             amrex::Print() << "WARNING: amr.do_substep = 1 is not yet validated for science runs. The coarse-  " << std::endl;
             amrex::Print() << "         to-fine coupling, the fine-to-coarse feedback and the tracer flux      " << std::endl;
             amrex::Print() << "         correction are all implemented, but no test checks conservation across " << std::endl;
-            amrex::Print() << "         the interface, and the free surface at the contact points is taken     " << std::endl;
-            amrex::Print() << "         from the parent's instantaneous state rather than a fast-time average. " << std::endl;
+            amrex::Print() << "         the coarse-fine interface.                                            " << std::endl;
             amrex::Print() << "********************************************************************************" << std::endl;
         }
     }
