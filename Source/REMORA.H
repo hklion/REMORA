@@ -1400,6 +1400,11 @@ private:
     /** \brief more flexible version of AverageDown() that lets you average down across multiple levels */
     void AverageDownTo (int crse_lev);
 
+    /** \brief Average one field down a level, weighted by the land/sea mask */
+    void average_down_masked (int crse_lev, const amrex::MultiFab& S_fine,
+                              amrex::MultiFab& S_crse, const amrex::MultiFab& msk_fine,
+                              const amrex::MultiFab& cmsk, int ncomp, int face_dir);
+
     /** \brief Construct FillPatchers */
     void Construct_REMORAFillPatchers (int lev);
 

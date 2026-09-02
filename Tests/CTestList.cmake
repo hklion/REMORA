@@ -44,8 +44,8 @@ macro(setup_test)
     endif()
 
     # Set some default runtime options for all tests in this category
-    # set(RUNTIME_OPTIONS "time.max_step=10 amr.plot_file=plt time.plot_interval=10 amrex.throw_exception=1 amrex.signal_handling=0")
-    # set(RUNTIME_OPTIONS "max_step=10 amr.plot_file=plt amr.checkpoint_files_output=0 amr.plot_files_output=1 amrex.signal_handling=0")
+    # Validate the land/sea masks everywhere in the suite; it is off by default at run time.
+    set(RUNTIME_OPTIONS "remora.check_mask_consistency=true")
 
 endmacro(setup_test)
 
@@ -103,7 +103,7 @@ function(add_test_r_gold TEST_NAME TEST_EXE PLTFILE GOLD_NAME)
 
     set(FCOMPARE_TOLERANCE "-r 1e-11 --abs_tol 1.0e-11")
     set(FCOMPARE_FLAGS "-a ${FCOMPARE_TOLERANCE}")
-    set(test_command sh -c "${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i > ${TEST_NAME}.log && ${FCOMPARE_EXE} ${FCOMPARE_FLAGS} ${FCOMPARE_GOLD_FILES_DIRECTORY}/${GOLD_NAME} ${CURRENT_TEST_BINARY_DIR}/${PLTFILE}")
+    set(test_command sh -c "${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i ${RUNTIME_OPTIONS} > ${TEST_NAME}.log && ${FCOMPARE_EXE} ${FCOMPARE_FLAGS} ${FCOMPARE_GOLD_FILES_DIRECTORY}/${GOLD_NAME} ${CURRENT_TEST_BINARY_DIR}/${PLTFILE}")
 
     add_test(${TEST_NAME} ${test_command})
     set_tests_properties(${TEST_NAME}
@@ -129,7 +129,7 @@ function(add_test_r_differ TEST_NAME TEST_EXE PLTFILE OTHER_GOLD)
 
     set(FCOMPARE_TOLERANCE "-r 1e-11 --abs_tol 1.0e-11")
     set(FCOMPARE_FLAGS "-a ${FCOMPARE_TOLERANCE}")
-    set(test_command sh -c "${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i > ${TEST_NAME}.log && ${FCOMPARE_EXE} ${FCOMPARE_FLAGS} ${PLOT_GOLD} ${CURRENT_TEST_BINARY_DIR}/${PLTFILE} && ! ${FCOMPARE_EXE} ${FCOMPARE_FLAGS} ${FCOMPARE_GOLD_FILES_DIRECTORY}/${OTHER_GOLD} ${CURRENT_TEST_BINARY_DIR}/${PLTFILE}")
+    set(test_command sh -c "${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i ${RUNTIME_OPTIONS} > ${TEST_NAME}.log && ${FCOMPARE_EXE} ${FCOMPARE_FLAGS} ${PLOT_GOLD} ${CURRENT_TEST_BINARY_DIR}/${PLTFILE} && ! ${FCOMPARE_EXE} ${FCOMPARE_FLAGS} ${FCOMPARE_GOLD_FILES_DIRECTORY}/${OTHER_GOLD} ${CURRENT_TEST_BINARY_DIR}/${PLTFILE}")
 
     add_test(${TEST_NAME} ${test_command})
     set_tests_properties(${TEST_NAME}
@@ -165,7 +165,7 @@ function(add_test_equiv TEST_NAME OTHER_INPUT TEST_EXE PLTFILE OTHER_PLTFILE)
         string(REPLACE ";" " " EXTREMA_ARGS "${ARGN}")
         set(EXTREMA_CLAUSE " && ${CMAKE_CURRENT_SOURCE_DIR}/check_extrema.sh ${FEXTREMA_EXE} ${CURRENT_TEST_BINARY_DIR}/${PLTFILE} ${EXTREMA_ARGS}")
     endif()
-    set(test_command sh -c "${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i > ${TEST_NAME}.log 2>&1 && ${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${OTHER_INPUT}.i > ${OTHER_INPUT}.log 2>&1 && ${FCOMPARE_EXE} ${FCOMPARE_FLAGS} ${CURRENT_TEST_BINARY_DIR}/${OTHER_PLTFILE} ${CURRENT_TEST_BINARY_DIR}/${PLTFILE}${EXTREMA_CLAUSE}")
+    set(test_command sh -c "${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i ${RUNTIME_OPTIONS} > ${TEST_NAME}.log 2>&1 && ${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${OTHER_INPUT}.i ${RUNTIME_OPTIONS} > ${OTHER_INPUT}.log 2>&1 && ${FCOMPARE_EXE} ${FCOMPARE_FLAGS} ${CURRENT_TEST_BINARY_DIR}/${OTHER_PLTFILE} ${CURRENT_TEST_BINARY_DIR}/${PLTFILE}${EXTREMA_CLAUSE}")
 
     add_test(${TEST_NAME} ${test_command})
     set_tests_properties(${TEST_NAME}
@@ -190,7 +190,7 @@ function(add_test_abort TEST_NAME TEST_EXE ABORT_SUBSTRING)
 
     resolve_test_exe("${TEST_DIR}" "${TEST_EXE}" TEST_EXE)
 
-    set(test_command sh -c "! ${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i > ${TEST_NAME}.log 2>&1 && grep -q -- \"${ABORT_SUBSTRING}\" ${TEST_NAME}.log")
+    set(test_command sh -c "! ${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i ${RUNTIME_OPTIONS} > ${TEST_NAME}.log 2>&1 && grep -q -- \"${ABORT_SUBSTRING}\" ${TEST_NAME}.log")
 
     add_test(${TEST_NAME} ${test_command})
     set_tests_properties(${TEST_NAME}
@@ -215,7 +215,7 @@ function(add_test_extrema TEST_NAME TEST_EXE PLTFILE TOL)
     resolve_test_exe("${TEST_DIR}" "${TEST_EXE}" TEST_EXE)
 
     string(REPLACE ";" " " EXTREMA_ARGS "${ARGN}")
-    set(test_command sh -c "${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i > ${TEST_NAME}.log && ${CMAKE_CURRENT_SOURCE_DIR}/check_extrema.sh ${FEXTREMA_EXE} ${CURRENT_TEST_BINARY_DIR}/${PLTFILE} ${TOL} ${EXTREMA_ARGS}")
+    set(test_command sh -c "${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i ${RUNTIME_OPTIONS} > ${TEST_NAME}.log && ${CMAKE_CURRENT_SOURCE_DIR}/check_extrema.sh ${FEXTREMA_EXE} ${CURRENT_TEST_BINARY_DIR}/${PLTFILE} ${TOL} ${EXTREMA_ARGS}")
 
     add_test(${TEST_NAME} ${test_command})
     set_tests_properties(${TEST_NAME}

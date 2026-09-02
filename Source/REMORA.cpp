@@ -4,6 +4,7 @@
 
 #include <REMORA_prob_common.H>
 #include <REMORA.H>
+#include <REMORA_MaskedAverageDown.H>
 
 #ifdef REMORA_USE_NETCDF
 #include "REMORA_NCFile.H"
@@ -988,8 +989,7 @@ void
 REMORA::check_mask_consistency ()
 {
     BL_PROFILE("REMORA::check_mask_consistency()");
-    if (solverChoice.mask_type == MaskType::none ||
-        solverChoice.mask_consistency == MaskConsistency::ignore) {
+    if (!solverChoice.do_check_mask_consistency || solverChoice.mask_type == MaskType::none) {
         return;
     }
 
@@ -2345,24 +2345,93 @@ void
 REMORA::AverageDownTo (int crse_lev)
 {
     BL_PROFILE("REMORA::AverageDownTo()");
-    average_down(*cons_new[crse_lev+1], *cons_new[crse_lev],
-                 0, cons_new[crse_lev]->nComp(), refRatio(crse_lev));
-    average_down(*vec_Zt_avg1[crse_lev+1].get(), *vec_Zt_avg1[crse_lev].get(),
-                 0, vec_Zt_avg1[crse_lev]->nComp(), refRatio(crse_lev));
+    const int flev = crse_lev + 1;
+    const IntVect ratio = refRatio(crse_lev);
 
-    Array<MultiFab*,AMREX_SPACEDIM>  faces_crse;
-    Array<MultiFab*,AMREX_SPACEDIM>  faces_fine;
-    faces_crse[0] = xvel_new[crse_lev];
-    faces_crse[1] = yvel_new[crse_lev];
-    faces_crse[2] = zvel_new[crse_lev];
+    // The masks live on the levels' own layouts, but the kernels walk the coarsened-fine one,
+    // so pull the coarse masks onto it first. Convert the coarsened cell-centered BoxArray
+    // rather than coarsening a converted one: on a face BoxArray the two do not commute.
+    const BoxArray cba = amrex::coarsen(vec_mskr[flev]->boxArray(), ratio);
+    const DistributionMapping& dmf = vec_mskr[flev]->DistributionMap();
 
-    faces_fine[0] = xvel_new[crse_lev+1];
-    faces_fine[1] = yvel_new[crse_lev+1];
-    faces_fine[2] = zvel_new[crse_lev+1];
+    MultiFab cmskr(cba,                                  dmf, 1, 0);
+    MultiFab cmsku(amrex::convert(cba, IntVect(1,0,0)),  dmf, 1, 0);
+    MultiFab cmskv(amrex::convert(cba, IntVect(0,1,0)),  dmf, 1, 0);
+    cmskr.ParallelCopy(*vec_mskr[crse_lev], 0, 0, 1);
+    cmsku.ParallelCopy(*vec_msku[crse_lev], 0, 0, 1);
+    cmskv.ParallelCopy(*vec_mskv[crse_lev], 0, 0, 1);
 
-    average_down_faces(GetArrOfConstPtrs(faces_fine), faces_crse,
-                       refRatio(crse_lev),geom[crse_lev]);
+    // Which mask goes with which field follows the ROMS fine2coarse call sites: rmask for the
+    // free surface and the tracers, umask and vmask for the momenta.
+    average_down_masked(crse_lev, *cons_new[flev], *cons_new[crse_lev],
+                        *vec_mskr[flev], cmskr, cons_new[crse_lev]->nComp(), -1);
+    average_down_masked(crse_lev, *vec_Zt_avg1[flev], *vec_Zt_avg1[crse_lev],
+                        *vec_mskr[flev], cmskr, vec_Zt_avg1[crse_lev]->nComp(), -1);
+    average_down_masked(crse_lev, *xvel_new[flev], *xvel_new[crse_lev],
+                        *vec_msku[flev], cmsku, 1, 0);
+    average_down_masked(crse_lev, *yvel_new[flev], *yvel_new[crse_lev],
+                        *vec_mskv[flev], cmskv, 1, 1);
+    average_down_masked(crse_lev, *zvel_new[flev], *zvel_new[crse_lev],
+                        *vec_mskr[flev], cmskr, 1, 2);
+
     stretch_transform(crse_lev);
+}
+
+/**
+ * Average one field from crse_lev+1 onto crse_lev, weighting by the land/sea mask.
+ *
+ * Follows amrex::average_down's non-MFIter-safe branch, since coarsen(grids[flev]) does not
+ * match grids[crse_lev] in general: compute onto a temporary on the coarsened-fine layout,
+ * then ParallelCopy that onto the coarse level. The periodicity arguments match what
+ * average_down and average_down_faces pass, so a run with no mask is unaffected.
+ *
+ * @param[in   ] crse_lev   level to average down to
+ * @param[in   ] S_fine     fine-level field
+ * @param[out  ] S_crse     coarse-level field
+ * @param[in   ] msk_fine   fine-level mask, on S_fine's layout and nodality
+ * @param[in   ] cmsk       coarse-level mask, already on the coarsened-fine layout
+ * @param[in   ] ncomp      number of components to average
+ * @param[in   ] face_dir   face direction, or -1 for a cell-centered field
+ */
+void
+REMORA::average_down_masked (int crse_lev, const MultiFab& S_fine, MultiFab& S_crse,
+                             const MultiFab& msk_fine, const MultiFab& cmsk,
+                             int ncomp, int face_dir)
+{
+    BL_PROFILE("REMORA::average_down_masked()");
+    const IntVect ratio = refRatio(crse_lev);
+
+    BoxArray cba = amrex::coarsen(S_fine.boxArray(), ratio);
+    MultiFab ctmp(cba, S_fine.DistributionMap(), ncomp, 0);
+
+    for (MFIter mfi(ctmp, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+    {
+        const Box& bx = mfi.tilebox();
+        Array4<      Real> const& c  = ctmp.array(mfi);
+        Array4<const Real> const& f  = S_fine.const_array(mfi);
+        Array4<const Real> const& fm = msk_fine.const_array(mfi);
+        Array4<const Real> const& cm = cmsk.const_array(mfi);
+
+        if (face_dir < 0) {
+            ParallelFor(bx, ncomp, [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) noexcept
+            {
+                REMORAMaskedAvgDown::avgdown_masked(i,j,k,n,c,f,fm,cm,0,0,ratio);
+            });
+        } else {
+            ParallelFor(bx, ncomp, [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) noexcept
+            {
+                REMORAMaskedAvgDown::avgdown_faces_masked(i,j,k,n,c,f,fm,cm,0,0,ratio,face_dir);
+            });
+        }
+    }
+    Gpu::streamSynchronize();
+
+    if (face_dir < 0) {
+        S_crse.ParallelCopy(ctmp, 0, 0, ncomp);
+    } else {
+        S_crse.ParallelCopy(ctmp, 0, 0, ncomp, IntVect(0), IntVect(0),
+                            geom[crse_lev].periodicity());
+    }
 }
 
 /**

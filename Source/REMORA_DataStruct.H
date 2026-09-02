@@ -95,7 +95,7 @@ enum class MaskType {
 
 /** \brief what to do when a level's mask disagrees with the level above it */
 enum class MaskConsistency {
-    abort, warn, ignore
+    abort, warn
 };
 
 /** \brief harmonic mixing; which surfaces to calculate along */
@@ -561,14 +561,17 @@ struct SolverChoice {
             amrex::Abort("Don't know this mask_type");
         }
 
+        // Off by default: the masks are derived from one specification, so this validates
+        // that machinery rather than user input. Worth paying for in the test suite and when
+        // bringing up a new grid, not in production.
+        pp.queryAdd("check_mask_consistency", do_check_mask_consistency);
+
         static std::string mask_consistency_string = "abort";
         pp.queryAdd("mask_consistency", mask_consistency_string);
         if (amrex::toLower(mask_consistency_string) == "abort") {
             mask_consistency = MaskConsistency::abort;
         } else if (amrex::toLower(mask_consistency_string) == "warn") {
             mask_consistency = MaskConsistency::warn;
-        } else if (amrex::toLower(mask_consistency_string) == "ignore") {
-            mask_consistency = MaskConsistency::ignore;
         } else {
             amrex::Abort("Don't know this mask_consistency");
         }
@@ -925,7 +928,8 @@ struct SolverChoice {
     // Land/sea mask type
     MaskType mask_type;
 
-    // What to do when the land/sea masks on two levels disagree
+    // Whether to validate the land/sea masks at all, and what to do when they fail
+    bool do_check_mask_consistency = false;
     MaskConsistency mask_consistency;
 
     // Mixing type and parameters
