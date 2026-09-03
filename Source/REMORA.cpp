@@ -117,7 +117,6 @@ REMORA::REMORA ()
     int nlevs_max = max_level + 1;
 
     istep.resize(nlevs_max, 0);
-    last_2d_knew.resize(nlevs_max, 0);
     set_nsubsteps(nlevs_max);
 
     physbcs.resize(nlevs_max);
@@ -179,7 +178,6 @@ REMORA::REMORA (const amrex::RealBox& rb, int max_level_in, const amrex::Vector<
     int nlevs_max = max_level + 1;
 
     istep.resize(nlevs_max, 0);
-    last_2d_knew.resize(nlevs_max, 0);
     set_nsubsteps(nlevs_max);
 
     physbcs.resize(nlevs_max);
@@ -2719,13 +2717,11 @@ REMORA::AverageDownTo (int crse_lev)
             average_down_faces(vbar_f, vbar_c, refRatio(crse_lev), 0);
         }
 
-        // zeta keeps a leapfrog history, and the two levels need not agree on which
-        // component is newest, so map one onto the other as ROMS does with its Dindex2d
-        // and Rindex2d (nesting.F). The two indices happen to coincide in the cases tested
-        // so far, which means the mapping itself is not yet exercised.
-        MultiFab zeta_f(*vec_zeta[crse_lev+1], make_alias, last_2d_knew[crse_lev+1], 1);
-        MultiFab zeta_c(*vec_zeta[crse_lev  ], make_alias, last_2d_knew[crse_lev  ], 1);
-        average_down(zeta_f, zeta_c, 0, 1, refRatio(crse_lev));
+        // zeta is deliberately not averaged down. setup_step calls set_zeta_to_Ztavg, which
+        // overwrites all three of its components from Zt_avg1 at the top of the next step,
+        // and stretch_transform reads Zt_avg1 rather than zeta, so nothing would ever read
+        // what was written here. Zt_avg1 is averaged down above and carries the free surface
+        // from child to parent on its own.
     }
 
     stretch_transform(crse_lev);

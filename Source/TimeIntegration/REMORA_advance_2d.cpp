@@ -100,10 +100,6 @@ REMORA::advance_2d (int lev,
     knew-=1;
     krhs-=1;
     kstp-=1;
-
-    // The last call of the fast loop leaves this level's newest barotropic solution here.
-    // AverageDownTo needs it because the rotation is per level: see last_2d_knew.
-    last_2d_knew[lev] = knew;
     // Include indx1 updates for diagnostic purposes?
     //indx1-=1;
     ptsk-=1;

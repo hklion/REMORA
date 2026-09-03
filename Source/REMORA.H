@@ -1635,10 +1635,6 @@ private:
     amrex::Vector<int> istep;
     /** \brief How many substeps on each level? */
     amrex::Vector<int> nsubsteps;
-
-    /** \brief the zeta time component holding each level's newest barotropic solution. The
-     *         rotation is per level, so two levels need not agree on which one that is. */
-    amrex::Vector<int> last_2d_knew;
     /** \brief new time at each level */
     amrex::Vector<amrex::Real> t_new;
     /** \brief old time at each level */
