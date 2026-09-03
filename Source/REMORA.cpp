@@ -421,9 +421,22 @@ REMORA::post_timestep (int nstep, Real time, Real dt_lev0)
                     }
                 };
 
+                // Keep what the correction is about to overwrite, so the clamp below can be
+                // confined to the cells it actually changed.
+                MultiFab pre_reflux;
+                if (reflux_clamp) {
+                    pre_reflux.define(cons_new[lev]->boxArray(), cons_new[lev]->DistributionMap(),
+                                      ncons, 0);
+                    MultiFab::Copy(pre_reflux, *cons_new[lev], 0, 0, ncons, 0);
+                }
+
                 scale_by_Hz(false);
                 getAdvFluxReg(lev+1)->Reflux(*cons_new[lev], 0, 0, ncons);
                 scale_by_Hz(true);
+
+                if (reflux_clamp) {
+                    clamp_reflux(lev, pre_reflux);
+                }
             }
 
             // We need to do this before anything else because refluxing changes the
@@ -2245,6 +2258,9 @@ REMORA::ReadParameters ()
     // two-way coupling to do anything.
     pp.queryAdd("do_reflux", do_reflux);
 
+    // Whether that correction may drive a tracer negative. See clamp_reflux.
+    pp.queryAdd("reflux_clamp", reflux_clamp);
+
     // Advance and timeStepML form the fast step as dt / ndtfast, and set_weights sizes
     // the barotropic filter with the same number, so a non-positive value divides by zero
     // at all three sites. Nothing can infer it: dt is not known until run time on a
@@ -2513,6 +2529,45 @@ REMORA::clear_avgdown_masks (int lev)
             vec_msku_crse_on_fine[crse_lev].reset();
             vec_mskv_crse_on_fine[crse_lev].reset();
         }
+    }
+}
+
+/**
+ * Stop the tracer flux correction from driving a tracer negative.
+ *
+ * ROMS applies its correction as Tvalue = MAX(0, t - cff*(TFF-TFC)) in correct_tracer_tile
+ * (nesting.F), over every tracer including temperature and salinity. Matched here by default,
+ * and switchable with remora.reflux_clamp.
+ *
+ * The clamp is not free: it puts back exactly the mass the correction removed, so a step that
+ * clamps is not conservative. That is the trade ROMS makes, positivity over conservation, and
+ * it is why this is an option rather than a fixed behaviour. Note also that clamping at zero
+ * suits a concentration but not temperature in Celsius, which is legitimately negative in
+ * polar water -- ROMS clamps it anyway.
+ *
+ * Only cells the correction actually changed are touched, so a value that was already negative
+ * before refluxing stays as it was.
+ *
+ * @param[in   ] lev         level the correction was applied to
+ * @param[in   ] pre_reflux  the tracers as they stood before it
+ */
+void
+REMORA::clamp_reflux (int lev, const MultiFab& pre_reflux)
+{
+#ifdef _OPENMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+    for (MFIter mfi(*cons_new[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi)
+    {
+        Array4<Real      > const& c   = cons_new[lev]->array(mfi);
+        Array4<Real const> const& pre = pre_reflux.const_array(mfi);
+        ParallelFor(mfi.tilebox(), ncons,
+        [=] AMREX_GPU_DEVICE (int i, int j, int k, int n)
+        {
+            if (c(i,j,k,n) < zero && c(i,j,k,n) != pre(i,j,k,n)) {
+                c(i,j,k,n) = zero;
+            }
+        });
     }
 }
 

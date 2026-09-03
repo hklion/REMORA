@@ -1661,6 +1661,9 @@ private:
     /** \brief build or rebuild the flux register between lev and lev-1 */
     void define_flux_register (int lev);
 
+    /** \brief stop the flux correction driving a tracer negative */
+    void clamp_reflux (int lev, const amrex::MultiFab& pre_reflux);
+
     ////////////////
     // boundary data members
 
@@ -1778,6 +1781,10 @@ private:
      *         at their interface. Only has an effect under amr.do_substep with two-way
      *         coupling. */
     int do_reflux = 1;
+
+    /** \brief stop that correction driving a tracer negative, as ROMS does. On by default to
+     *         match ROMS; costs exact conservation on any step that clamps. */
+    int reflux_clamp = 1;
 
     /** \brief how often each level regrids the higher levels of refinement (after a level advances that many time steps) */
     int regrid_int = 2;

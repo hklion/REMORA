@@ -416,6 +416,13 @@ Notes
    accumulated advective flux at their interface. It needs **amr.do_substep** = 1 and
    **remora.coupling_type** = TwoWay to have any effect.
 
+-  **remora.reflux_clamp** (default 1) stops that correction driving a tracer negative, matching
+   what ROMS does in ``correct_tracer_tile``. Set it to 0 to let the correction through unaltered.
+   The clamp is not free: it restores exactly the mass the correction removed, so a step that
+   clamps is not conservative -- positivity and conservation cannot both hold, and ROMS chooses
+   positivity. Note that it clamps every tracer at zero, temperature included, which suits a
+   concentration but not temperature in Celsius.
+
 .. _examples-of-usage-3:
 
 Examples of Usage
