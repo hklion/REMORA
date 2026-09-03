@@ -2705,8 +2705,10 @@ REMORA::AverageDownTo (int crse_lev)
     // Without it a child drifts from its parent over nsubsteps steps with nothing pulling
     // it back. Gated: the lockstep answers were blessed without it.
     if (do_substep) {
-        // update_massflux_3d has just set components 0 and 1 of both to the same
-        // vertically integrated velocity, so these two are index-safe to average.
+        // The next step's advance_2d reads ubar(krhs) with krhs = istep % 2 to form DUon,
+        // so this feeds straight into the parent's next barotropic step -- dropping it
+        // moves the Dogbone x-velocity by 9%. Components 0 and 1 are the index-safe pair:
+        // update_massflux_3d has just set both to the same vertically integrated velocity.
         for (int icomp = 0; icomp < 2; ++icomp) {
             MultiFab ubar_f(*vec_ubar[crse_lev+1], make_alias, icomp, 1);
             MultiFab ubar_c(*vec_ubar[crse_lev  ], make_alias, icomp, 1);
