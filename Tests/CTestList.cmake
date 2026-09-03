@@ -227,6 +227,46 @@ function(add_test_r_selfcompare TEST_NAME TEST_EXE PLTFILE OPTIONS_A OPTIONS_B)
     )
 endfunction(add_test_r_selfcompare)
 
+# Assert how far an integrated quantity drifts over a run. INPUT_NAME picks the input file, so
+# several tests can share one case; OPTIONS go on the command line; the remaining arguments are
+# <column> <bound> <below|above> triples handed to check_conservation.sh.
+function(add_test_conservation TEST_NAME INPUT_NAME TEST_EXE OPTIONS)
+
+    set(CURRENT_TEST_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test_files/${INPUT_NAME})
+    set(CURRENT_TEST_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test_files/${TEST_NAME})
+    file(MAKE_DIRECTORY ${CURRENT_TEST_BINARY_DIR})
+    file(GLOB TEST_FILES "${CURRENT_TEST_SOURCE_DIR}/*")
+    file(COPY ${TEST_FILES} DESTINATION "${CURRENT_TEST_BINARY_DIR}/")
+
+    if(REMORA_ENABLE_MPI)
+        set(NP 2)
+        set(MPI_COMMANDS "${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${NP} ${MPIEXEC_PREFLAGS}")
+    else()
+        set(NP 1)
+        unset(MPI_COMMANDS)
+    endif()
+
+    resolve_test_exe("${TEST_DIR}" "${TEST_EXE}" TEST_EXE)
+
+    # sum_integrated_quantities returns immediately below verbosity 1, and its default six
+    # digits cannot resolve the drifts asserted on here. The data log is opened for append, so
+    # a stale one from an earlier run would supply the wrong first row.
+    set(SUM_OPTS "remora.v=1 remora.sum_interval=1 remora.sum_precision=12 remora.data_log=cons.log")
+    string(REPLACE ";" " " CHECKS "${ARGN}")
+
+    set(test_command sh -c "rm -f cons.log && ${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${INPUT_NAME}.i ${SUM_OPTS} ${OPTIONS} > ${TEST_NAME}.log 2>&1 && ${CMAKE_CURRENT_SOURCE_DIR}/check_conservation.sh cons.log ${CHECKS}")
+
+    add_test(${TEST_NAME} ${test_command})
+    set_tests_properties(${TEST_NAME}
+        PROPERTIES
+        TIMEOUT 5400
+        PROCESSORS ${NP}
+        WORKING_DIRECTORY "${CURRENT_TEST_BINARY_DIR}/"
+        LABELS "regression"
+        ATTACHED_FILES_ON_FAIL "${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.log"
+    )
+endfunction(add_test_conservation)
+
 # Run must succeed AND its log must contain LOG_SUBSTRING. For a code path whose answers are
 # not yet worth blessing into a gold file, but which must keep reaching the named behavior.
 function(add_test_log TEST_NAME TEST_EXE LOG_SUBSTRING)
@@ -360,6 +400,40 @@ add_test_r_selfcompare(Advection_ML_subcycle_identity "remora_exec" "plt00020"
 # the interpolation it replaces. This lane has varying bathymetry and a refinement ratio of 3,
 # so the mass-flux form is actually exercised.
 add_test_log(DogboneAnalytic_ML_subcycle "remora_exec" "3 x 3          3          60       0.6667")
+
+#=============================================================================
+# Conservation
+#
+# Advection is doubly periodic and DogboneAnalytic is closed by slipwalls, so in both nothing
+# can leave the domain and the totals have to hold. Bounds come from measurement, not from
+# taste; the numbers each one is separating are in the comments.
+#=============================================================================
+
+# Tracer mass. Refluxing takes the drift from 7.8e-5 to below what 12 digits can resolve.
+add_test_conservation(Advection_ML_conservation Advection_ML_subcycle "remora_exec"
+                      "remora.max_step=20 remora.do_reflux=1 remora.reflux_clamp=0"
+                      tracer 1e-10 below)
+
+# The control, and the reason the lane above means anything: without refluxing the same run
+# must drift. If this ever passes by conserving, the case has stopped exercising the
+# correction -- no interface, no gradient across it, or a no-op -- and its partner above is
+# proving nothing.
+add_test_conservation(Advection_ML_conservation_control Advection_ML_subcycle "remora_exec"
+                      "remora.max_step=20 remora.do_reflux=0"
+                      tracer 1e-6 above)
+
+# The floor. Both totals are exact on one level, so the AMR bounds are measured against
+# roundoff rather than against an unknown scheme error.
+add_test_conservation(Advection_conservation_baseline Advection_ML_subcycle "remora_exec"
+                      "remora.max_step=20 amr.max_level=0"
+                      tracer 1e-12 below volume 1e-12 below)
+
+# Volume, which is what the barotropic interface controls: the fine faces have to carry the
+# coarse face's mass flux. Single level is exact, this is 3.1e-10, and the lockstep driver --
+# which interpolates ubar instead of imposing the flux -- is 2.0e-6.
+add_test_conservation(DogboneAnalytic_ML_conservation DogboneAnalytic_ML_subcycle "remora_exec"
+                      "remora.max_step=20"
+                      volume 1e-8 below)
 
 #=============================================================================
 # High-resolution initialization (remora.hires_grid_level / remora.hires_init_level)
