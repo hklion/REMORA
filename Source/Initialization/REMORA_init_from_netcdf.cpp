@@ -348,9 +348,9 @@ REMORA::init_data_full_domain_from_netcdf ()
     // Average down to fill levels below hires_grid_level. Use a special average_down so
     // grow cells get populated by averaged down fine data
     for (int lev=hires_init_level-1; lev >= 0; lev--) {
-        average_down_with_grow_cells(lev, vec_cons_full_domain);
-        average_down_with_grow_cells(lev, vec_xvel_full_domain);
-        average_down_with_grow_cells(lev, vec_yvel_full_domain);
+        average_down_with_grow_cells(lev, vec_cons_full_domain, true);
+        average_down_with_grow_cells(lev, vec_xvel_full_domain, true);
+        average_down_with_grow_cells(lev, vec_yvel_full_domain, true);
     }
 }
 
@@ -519,7 +519,7 @@ REMORA::init_zeta_full_domain_from_netcdf ()
     // Average down to fill levels below hires_grid_level. Use a special average_down so
     // grow cells get populated by averaged down fine data
     for (int lev=hires_init_level-1; lev >= 0; lev--) {
-        average_down_with_grow_cells(lev, vec_zeta_full_domain);
+        average_down_with_grow_cells(lev, vec_zeta_full_domain, true);
     }
 }
 

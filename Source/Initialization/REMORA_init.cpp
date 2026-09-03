@@ -101,7 +101,7 @@ REMORA::init_biology_ic_full_domain ()
     // nothing else, so every level below it -- including level 0, the one the run actually
     // integrates -- kept the zeros that init_data_full_domain_from_netcdf had written.
     for (int lev = hires_init_level-1; lev >= 0; lev--) {
-        average_down_with_grow_cells(lev, vec_cons_full_domain);
+        average_down_with_grow_cells(lev, vec_cons_full_domain, true);
     }
 }
 
@@ -438,9 +438,9 @@ REMORA::init_full_domain_from_analytic ()
     init_biology_ic_full_domain();
 
     for (int lev=hires_init_level-1; lev >= 0; lev--) {
-        average_down_with_grow_cells(lev, vec_cons_full_domain);
-        average_down_with_grow_cells(lev, vec_xvel_full_domain);
-        average_down_with_grow_cells(lev, vec_yvel_full_domain);
+        average_down_with_grow_cells(lev, vec_cons_full_domain, true);
+        average_down_with_grow_cells(lev, vec_xvel_full_domain, true);
+        average_down_with_grow_cells(lev, vec_yvel_full_domain, true);
     }
 }
 
@@ -450,6 +450,6 @@ REMORA::init_full_domain_zeta_from_analytic ()
     prob->init_analytic_zeta(hires_init_level, geom[hires_init_level], solverChoice, *this, *vec_zeta_full_domain[hires_init_level]);
 
     for (int lev=hires_init_level-1; lev >= 0; lev--) {
-        average_down_with_grow_cells(lev, vec_zeta_full_domain);
+        average_down_with_grow_cells(lev, vec_zeta_full_domain, true);
     }
 }

@@ -416,7 +416,9 @@ void REMORA::resize_stuff(int lev)
     vec_z_phys_nd.resize(lev+1);
 
     vec_h_full_domain.resize(hires_grid_level+1);
-    vec_mskr_full_domain.resize(hires_grid_level+1);
+    // Sized for both hires knobs: the initial-state cascade needs a mask at
+    // hires_init_level, which may sit above hires_grid_level.
+    vec_mskr_full_domain.resize(std::max(hires_grid_level, hires_init_level)+1);
 
     vec_h.resize(lev+1);
     vec_Zt_avg1.resize(lev+1);

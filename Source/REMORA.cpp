@@ -1888,6 +1888,8 @@ REMORA::init_only (int lev, Real time)
     if (lev==0 and hires_init_level > 0 and solverChoice.ic_type == IC_Type::netcdf) {
         amrex::Print() << "Reading high resolution initial data" << std::endl;
         allocate_init_full_domain();
+        // The initial-state cascade is mask-weighted, so a mask has to exist this high up.
+        ensure_full_domain_masks(hires_init_level);
         init_data_full_domain_from_netcdf();
         // Biology source is chosen by remora.biology_ic_type, not by ic_type,
         // so this goes through the same dispatcher as the per-level path.
@@ -2487,17 +2489,155 @@ REMORA::average_down_masked (int crse_lev, const MultiFab& S_fine, MultiFab& S_c
 }
 
 /**
- * @param[in   ] crse_lev   level to average data down to
- * @param[inout] vec_mf     vector over levels of multifabs containing data to average
+ * Inject the full-domain rho-mask from fine_lev-1 up onto fine_lev, grow cells included.
+ *
+ * Piecewise constant, which is the rule set_masks already uses for a level above the one the
+ * mask was specified on. Nothing finer is known there, so refining cannot add coastline.
+ *
+ * @param[in   ] fine_lev   level to inject onto
  */
 void
-REMORA::average_down_with_grow_cells (int crse_lev, Vector<std::unique_ptr<MultiFab>>& vec_mf)
+REMORA::refine_masks_with_grow_cells (int fine_lev)
+{
+    auto const& finema = vec_mskr_full_domain[fine_lev]->arrays();
+    auto const& crsema = vec_mskr_full_domain[fine_lev-1]->const_arrays();
+    auto ratio = refRatio(fine_lev-1);
+    auto nghost_fine = cum_ref_ratios[fine_lev];
+    ParallelFor(*vec_mskr_full_domain[fine_lev], nghost_fine, 1,
+            [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k, int n) noexcept
+    {
+        // amrex::coarsen floors rather than truncating, which is what the negative indices of
+        // the grow cells need.
+        finema[box_no](i,j,k,n) = crsema[box_no](amrex::coarsen(i, ratio[0]),
+                                                amrex::coarsen(j, ratio[1]), k, n);
+    });
+    Gpu::streamSynchronize();
+}
+
+/**
+ * Make sure the full-domain rho-mask exists on levels 0 through top_lev.
+ *
+ * The mask is specified once and every other level derived from it, so this only fills what
+ * the hires_grid_level cascade has not: levels above it, by injection, and level 0 itself when
+ * there is no high-resolution grid at all and the mask was given per-level instead.
+ *
+ * @param[in   ] top_lev   highest level that needs a mask
+ */
+void
+REMORA::ensure_full_domain_masks (int top_lev)
+{
+    if (solverChoice.mask_type == MaskType::none || top_lev <= 0) { return; }
+
+    // Levels up to hires_grid_level were coarsened down from it already.
+    const int have = (hires_grid_level > 0) ? hires_grid_level : 0;
+    if (top_lev <= have) { return; }
+
+    BoxArray ba;
+    ba.define(makeSlab(geom[0].Domain(),2,0));
+    DistributionMapping dm(ba);
+    auto mskr_growvect = vec_mskr[0]->nGrowVect();
+
+    if (hires_grid_level < 0) {
+        // No high-resolution grid, so the specification lives on level 0. Seed from it.
+        vec_mskr_full_domain[0].reset(new MultiFab(ba, dm, 1, IntVect(1,1,0)));
+        vec_mskr_full_domain[0]->setVal(one);
+        ParallelCopy(*vec_mskr_full_domain[0].get(), *vec_mskr[0].get(), 0, 0, 1,
+                vec_mskr[0]->nGrowVect(), vec_mskr_full_domain[0]->nGrowVect());
+    }
+
+    for (int lev = 1; lev <= top_lev; lev++) {
+        ba = ba.refine(refRatio(lev-1));
+        if (lev <= have) { continue; }
+        vec_mskr_full_domain[lev].reset(new MultiFab(ba, dm, 1,
+                    max(cum_ref_ratios[lev], mskr_growvect)));
+        vec_mskr_full_domain[lev]->setVal(one);
+        refine_masks_with_grow_cells(lev);
+    }
+}
+
+/**
+ * Average a full-domain field from crse_lev+1 onto crse_lev, grow cells included.
+ *
+ * With use_mask, the mask-weighted mean of REMORAMaskedAvgDown is used instead of the plain
+ * one, so that the initial state on a coarse cell only partly covered by water comes from that
+ * water rather than from a mean diluted by land. That is the same formula AverageDownTo applies
+ * every step, so the initial and the running state agree on what a land point holds.
+ *
+ * Leave use_mask off for grid metrics: a cell size is perfectly well defined under land, and
+ * masking pm/pn would corrupt it.
+ *
+ * @param[in   ] crse_lev   level to average data down to
+ * @param[inout] vec_mf     vector over levels of multifabs containing data to average
+ * @param[in   ] use_mask   weight by the land/sea mask rather than averaging the whole block
+ */
+void
+REMORA::average_down_with_grow_cells (int crse_lev, Vector<std::unique_ptr<MultiFab>>& vec_mf,
+                                      bool use_mask)
 {
     auto const& crsema = vec_mf[crse_lev]->arrays();
     auto const& finema = vec_mf[crse_lev+1]->const_arrays();
     auto ref_ratio_crse = refRatio(crse_lev);
     auto index_type = (vec_mf[crse_lev]->boxArray().ixType()).toIntVect();
     auto nghost_crse = cum_ref_ratios[crse_lev] - index_type;
+
+    const bool masked = use_mask && (solverChoice.mask_type != MaskType::none);
+    if (masked) {
+        // The full-domain arrays are one box per level on a matching DistributionMapping, so an
+        // MFIter over one indexes the other. Assert it rather than assume it.
+        AMREX_ALWAYS_ASSERT(vec_mskr_full_domain[crse_lev] && vec_mskr_full_domain[crse_lev+1]);
+        AMREX_ALWAYS_ASSERT(vec_mskr_full_domain[crse_lev]->boxArray().size() ==
+                            vec_mf[crse_lev]->boxArray().size());
+        AMREX_ALWAYS_ASSERT(vec_mskr_full_domain[crse_lev]->DistributionMap() ==
+                            vec_mf[crse_lev]->DistributionMap());
+
+        // Face masks are derived here rather than stored: nothing else needs them, and a
+        // derived one cannot drift out of sync with the rho mask it comes from. The rule is
+        // ROMS set_masks.F's, msku = mskr(i-1,j)*mskr(i,j).
+        const int idir = (index_type[0]==1) ? 0 : ((index_type[1]==1) ? 1 : -1);
+        MultiFab fmsk, cmsk;
+        if (idir >= 0) {
+            const IntVect nd = (idir == 0) ? IntVect(1,0,0) : IntVect(0,1,0);
+            for (int which = 0; which < 2; ++which) {
+                const int mlev = crse_lev + 1 - which;
+                MultiFab& dst = (which == 0) ? fmsk : cmsk;
+                const MultiFab& src = *vec_mskr_full_domain[mlev];
+                // One ring narrower than the rho mask, since the stencil reaches back a cell.
+                const IntVect ng = max(src.nGrowVect() - IntVect(1,1,0), IntVect(0));
+                dst.define(convert(src.boxArray(), nd), src.DistributionMap(), 1, ng);
+                dst.setVal(one);
+                for (MFIter mfi(dst, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+                    const Box& bx = mfi.growntilebox();
+                    Array4<      Real> const& mf = dst.array(mfi);
+                    Array4<const Real> const& mr = src.const_array(mfi);
+                    const int l_idir = idir;
+                    ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+                    {
+                        mf(i,j,k) = (l_idir == 0) ? mr(i-1,j,0) * mr(i,j,0)
+                                                  : mr(i,j-1,0) * mr(i,j,0);
+                    });
+                }
+            }
+        }
+        auto const& fmskma = (idir >= 0) ? fmsk.const_arrays()
+                                         : vec_mskr_full_domain[crse_lev+1]->const_arrays();
+        auto const& cmskma = (idir >= 0) ? cmsk.const_arrays()
+                                         : vec_mskr_full_domain[crse_lev]->const_arrays();
+        const int ncomp = (idir >= 0) ? 1 : vec_mf[crse_lev]->nComp();
+        ParallelFor(*vec_mf[crse_lev], nghost_crse, ncomp,
+                [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k, int n) noexcept
+        {
+            if (idir < 0) {
+                REMORAMaskedAvgDown::avgdown_masked(i,j,k,n,crsema[box_no],finema[box_no],
+                        fmskma[box_no],cmskma[box_no],0,0,ref_ratio_crse);
+            } else {
+                REMORAMaskedAvgDown::avgdown_faces_masked(i,j,k,n,crsema[box_no],finema[box_no],
+                        fmskma[box_no],cmskma[box_no],0,0,ref_ratio_crse,idir);
+            }
+        });
+        Gpu::streamSynchronize();
+        return;
+    }
+
     if (index_type[0]==0 and index_type[1]==0) {
         ParallelFor(*vec_mf[crse_lev], nghost_crse, vec_mf[crse_lev]->nComp(),
                 [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k, int n) noexcept

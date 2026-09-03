@@ -1117,6 +1117,13 @@ public:
      * included, weighted by the land/sea mask */
     void coarsen_bathymetry_with_grow_cells (int crse_lev);
 
+    /** \brief Inject the full-domain rho-mask from fine_lev-1 onto fine_lev, piecewise
+     * constant, grow cells included */
+    void refine_masks_with_grow_cells (int fine_lev);
+
+    /** \brief Make sure the full-domain rho-mask exists on levels 0 through top_lev */
+    void ensure_full_domain_masks (int top_lev);
+
     /** \brief Rebuild the u-, v- and psi-point masks from vec_mskr and fill their ghosts */
     void update_nodal_masks (int lev);
 
@@ -1329,7 +1336,8 @@ public:
     void mask_arrays_for_write (int lev, amrex::Real fill_value, amrex::Real fill_where);
 
     /** \brief Average down from level lev+1 to lev in mf, including grow cells */
-    void average_down_with_grow_cells(int lev, amrex::Vector<std::unique_ptr<amrex::MultiFab>>& mf);
+    void average_down_with_grow_cells(int lev, amrex::Vector<std::unique_ptr<amrex::MultiFab>>& mf,
+                                      bool use_mask = false);
 
     int xvel_bc () const noexcept { return BCVars::xvel_bc(ncons); }
     int yvel_bc () const noexcept { return BCVars::yvel_bc(ncons); }
