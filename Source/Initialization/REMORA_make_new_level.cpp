@@ -85,6 +85,12 @@ REMORA::MakeNewLevelFromCoarse (int lev, Real time, const BoxArray& ba,
     vec_vbar[lev]->setVal(zero);
 
 
+    // Before the fills: FillPatch masks domain-boundary ghosts through physbcs, so these must
+    // hold the real coastline rather than init_masks' all-water placeholder. Order matters:
+    // init_stuff reallocates the coordinates set_grid_scale fills, which set_masks may read.
+    set_grid_scale(lev);
+    set_masks(lev);
+
     FillCoarsePatch(lev, time, cons_new[lev], cons_new[lev-1],BCVars::Temp_bc_comp,BdyVars::t);
     FillCoarsePatch(lev, time, xvel_new[lev], xvel_new[lev-1], xvel_bc(), BdyVars::u);
     FillCoarsePatch(lev, time, yvel_new[lev], yvel_new[lev-1], yvel_bc(), BdyVars::v);
@@ -117,11 +123,6 @@ REMORA::MakeNewLevelFromCoarse (int lev, Real time, const BoxArray& ba,
                 BdyVars::null,icomp,false);
     }
 
-    set_grid_scale(lev);
-    // After set_grid_scale: an analytic mask reads the grid coordinates it fills. This picks
-    // the same lane level 0 uses, so a level at or below hires_grid_level takes the
-    // high-resolution mask instead of an injection from the coarser level.
-    set_masks(lev);
     stretch_transform(lev);
 
     init_set_vmix(lev);
@@ -235,6 +236,11 @@ REMORA::RemakeLevel (int lev, Real time, const BoxArray& ba, const DistributionM
     tmp_vbar_new.setVal(zero);
 
 
+    // As in MakeNewLevelFromCoarse. init_stuff comes along because set_grid_scale follows it.
+    init_stuff(lev, ba, dm);
+    set_grid_scale(lev);
+    set_masks(lev);
+
     // This will fill the temporary MultiFabs with data from previous fine data as well as coarse where needed
     FillPatch(lev, time, tmp_cons_new, cons_new, BCVars::cons_bc, BdyVars::t,0,true,false);
     FillPatch(lev, time, tmp_xvel_new, xvel_new, xvel_bc(), BdyVars::u,0,true,false,0,0,zero,tmp_xvel_new);
@@ -294,13 +300,6 @@ REMORA::RemakeLevel (int lev, Real time, const BoxArray& ba, const DistributionM
     t_new[lev] = time;
     t_old[lev] = time - bogus_large_value;
 
-    init_stuff(lev, ba, dm);
-
-    set_grid_scale(lev);
-    // See MakeNewLevelFromCoarse. The init_masks call further up already allocated the masks
-    // on the new BoxArray -- set_bathymetry_averaged_down needs them there -- so this only
-    // has to fill them.
-    set_masks(lev);
     stretch_transform(lev);
 
     init_set_vmix(lev);
