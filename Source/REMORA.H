@@ -1113,6 +1113,10 @@ public:
      * included, by the rule that a coarse cell is land only if all its fine cells are land */
     void coarsen_masks_with_grow_cells (int crse_lev);
 
+    /** \brief Coarsen the full-domain bathymetry from crse_lev+1 onto crse_lev, grow cells
+     * included, weighted by the land/sea mask */
+    void coarsen_bathymetry_with_grow_cells (int crse_lev);
+
     /** \brief Rebuild the u-, v- and psi-point masks from vec_mskr and fill their ghosts */
     void update_nodal_masks (int lev);
 

@@ -363,10 +363,10 @@ REMORA::init_bathymetry_full_domain_from_analytic ()
 {
     // init_analytic_bathymetry needs to be able to handle the full number of grow cells that vec_h_full_domain has
     prob->init_analytic_bathymetry(hires_grid_level, Geom(hires_grid_level), solverChoice, *this, *vec_h_full_domain[hires_grid_level]);
-    // Average down to fill levels below hires_grid_level. Use a special average_down so grow cells
-    // get populated by averaged down fine data
+    // Coarsen to fill levels below hires_grid_level, grow cells included. Mask-weighted, so a
+    // coarse cell only partly covered by water takes the depth of that water.
     for (int lev=hires_grid_level-1; lev >= 0; lev--) {
-        average_down_with_grow_cells(lev, vec_h_full_domain);
+        coarsen_bathymetry_with_grow_cells(lev);
     }
 }
 

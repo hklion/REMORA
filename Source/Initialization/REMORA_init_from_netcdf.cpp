@@ -1141,10 +1141,10 @@ REMORA::init_bathymetry_full_domain_from_netcdf ()
         h_fab.template    copy<RunOn::Device>(NC_h_fab[0]);
     }
 
-    // Average down to fill levels below hires_grid_level. Use a special average_down so
-    // grow cells get populated by averaged down fine data
+    // Coarsen to fill levels below hires_grid_level, grow cells included. Mask-weighted, so a
+    // coarse cell only partly covered by water takes the depth of that water.
     for (int lev=hires_grid_level-1; lev >= 0; lev--) {
-        average_down_with_grow_cells(lev, vec_h_full_domain);;
+        coarsen_bathymetry_with_grow_cells(lev);
     }
 }
 
