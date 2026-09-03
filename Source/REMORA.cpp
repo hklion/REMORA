@@ -2701,14 +2701,15 @@ REMORA::AverageDownTo (int crse_lev)
     average_down_masked(crse_lev, *zvel_new[flev], *zvel_new[crse_lev],
                         *vec_mskr[flev], cmskr, 1, 2);
 
-    // ROMS's fine2coarse replaces the coarse 2D state, not just the free surface average.
-    // Without it a child drifts from its parent over nsubsteps steps with nothing pulling
-    // it back. Gated: the lockstep answers were blessed without it.
+    // Hand the child's 2D momentum back to the parent, as ROMS's fine2coarse does. The
+    // parent's next advance_2d reads ubar(krhs), krhs = istep % 2, to form DUon, so this
+    // feeds its next barotropic step: dropping it moves the Dogbone x-velocity by 9%.
+    // Gated because the lockstep answers were blessed without it.
     if (do_substep) {
-        // The next step's advance_2d reads ubar(krhs) with krhs = istep % 2 to form DUon,
-        // so this feeds straight into the parent's next barotropic step -- dropping it
-        // moves the Dogbone x-velocity by 9%. Components 0 and 1 are the index-safe pair:
-        // update_massflux_3d has just set both to the same vertically integrated velocity.
+        // Only components 0 and 1. ubar's three components are leapfrog slots that rotate
+        // per level, so the parent's component n need not hold the same time level as the
+        // child's. These two are exempt: update_massflux_3d has just set both to the same
+        // vertically integrated velocity, so averaging them cannot mix time levels.
         for (int icomp = 0; icomp < 2; ++icomp) {
             MultiFab ubar_f(*vec_ubar[crse_lev+1], make_alias, icomp, 1);
             MultiFab ubar_c(*vec_ubar[crse_lev  ], make_alias, icomp, 1);
@@ -2719,11 +2720,10 @@ REMORA::AverageDownTo (int crse_lev)
             average_down_faces(vbar_f, vbar_c, refRatio(crse_lev), 0);
         }
 
-        // zeta is deliberately not averaged down. setup_step calls set_zeta_to_Ztavg, which
-        // overwrites all three of its components from Zt_avg1 at the top of the next step,
-        // and stretch_transform reads Zt_avg1 rather than zeta, so nothing would ever read
-        // what was written here. Zt_avg1 is averaged down above and carries the free surface
-        // from child to parent on its own.
+        // zeta is deliberately absent. Zt_avg1, averaged down above, already carries the
+        // free surface: set_zeta_to_Ztavg overwrites all three zeta components from it at
+        // the top of the next step, and stretch_transform reads it rather than zeta. So
+        // averaging zeta here writes something nothing reads.
     }
 
     stretch_transform(crse_lev);
