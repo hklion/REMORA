@@ -2249,13 +2249,8 @@ REMORA::ReadParameters ()
     // Number of barotropic (fast) steps taken per baroclinic (slow) step.
     pp.queryAdd("ndtfast", ndtfast);
 
-    // Advance finer levels nsubsteps[lev] times per parent step. Setting this to 0 selects
-    // timeStepML, which marches every level once per step through one shared barotropic loop;
-    // it is kept as a comparison path against the answers that predate subcycling.
-    //
-    // amr.do_substep is the original spelling and still works, but amrex owns that namespace,
-    // so remora.do_substep is preferred. Read the alias first so the queryAdd below records
-    // the resulting value under the preferred name.
+    // 0 selects timeStepML, kept as a comparison path. amr.do_substep is the original
+    // spelling; read it first so the queryAdd below records the value under the new name.
     {
         ParmParse pp_amr("amr");
         if (pp_amr.contains("do_substep")) {
@@ -2551,20 +2546,8 @@ REMORA::clear_avgdown_masks (int lev)
 }
 
 /**
- * Stop the tracer flux correction from driving a tracer negative.
- *
- * ROMS applies its correction as Tvalue = MAX(0, t - cff*(TFF-TFC)) in correct_tracer_tile
- * (nesting.F), over every tracer including temperature and salinity. Matched here by default,
- * and switchable with remora.reflux_clamp.
- *
- * The clamp is not free: it puts back exactly the mass the correction removed, so a step that
- * clamps is not conservative. That is the trade ROMS makes, positivity over conservation, and
- * it is why this is an option rather than a fixed behaviour. Note also that clamping at zero
- * suits a concentration but not temperature in Celsius, which is legitimately negative in
- * polar water -- ROMS clamps it anyway.
- *
- * Only cells the correction actually changed are touched, so a value that was already negative
- * before refluxing stays as it was.
+ * Stop the tracer flux correction from driving a tracer negative, as ROMS does in
+ * correct_tracer_tile (nesting.F): Tvalue = MAX(0, t - cff*(TFF-TFC)).
  *
  * @param[in   ] lev         level the correction was applied to
  * @param[in   ] pre_reflux  the tracers as they stood before it
@@ -2579,6 +2562,9 @@ REMORA::clamp_reflux (int lev, const MultiFab& pre_reflux)
     {
         Array4<Real      > const& c   = cons_new[lev]->array(mfi);
         Array4<Real const> const& pre = pre_reflux.const_array(mfi);
+        // Only cells the correction changed. Clamping restores the mass it removed, so a
+        // step that clamps is not conservative: ROMS's trade, and why this is an option.
+        // Zero suits a concentration, less so temperature in Celsius; ROMS clamps that too.
         ParallelFor(mfi.tilebox(), ncons,
         [=] AMREX_GPU_DEVICE (int i, int j, int k, int n)
         {
@@ -2590,18 +2576,12 @@ REMORA::clamp_reflux (int lev, const MultiFab& pre_reflux)
 }
 
 /**
- * Measure whether the fine cell edges tile the coarse ones across a coarse-fine interface.
+ * Measure whether the fine cell edges tile the coarse ones across a coarse-fine interface:
+ * the sum of on_u over the r covering fine faces against on_u on the coarse face.
  *
- * set_2d_cf_bcs hands a finer level the parent's mass flux per unit edge length and lets each
- * fine face multiply its own edge length back in. The fine fluxes therefore sum to the coarse
- * flux they replace only if the fine edges sum to the coarse edge:
- *
- *     sum over the r fine faces of on_u_f  ==  on_u_c
- *
- * That is exact when pm and pn are uniform, and not guaranteed otherwise -- on the NetCDF path
- * a finer level takes its metrics from an interpolation of the parent's, scaled by the
- * refinement ratio, which need not preserve the sum. The imposed flux cannot be conservative
- * without it, so measure it rather than assume it.
+ * Exact where pm and pn are uniform, and not guaranteed otherwise -- on the NetCDF path a
+ * finer level interpolates its metrics from the parent's and rescales them, which need not
+ * preserve a sum. set_2d_cf_bcs cannot impose a conservative flux without this identity.
  *
  * @param[in   ] crse_lev  coarse side of the interface
  */
@@ -2684,10 +2664,9 @@ REMORA::check_cf_metrics (int crse_lev)
 }
 
 /**
- * Build the flux register holding the tracer flux mismatch between lev and lev-1.
- *
- * Called whenever a level is created or its grids change, not once at startup: a level that
- * first appears mid-run through tagging would otherwise have no register.
+ * Build the flux register holding the tracer flux mismatch between lev and lev-1. Called
+ * whenever a level is created or its grids change, since one appearing mid-run through
+ * tagging would otherwise have no register.
  *
  * @param[in   ] lev  level of refinement, > 0
  */
@@ -2707,12 +2686,7 @@ REMORA::define_flux_register (int lev)
 }
 
 /**
- * Set how many steps each level takes per parent step.
- *
- * Defaults to the spatial refinement ratio, but the two are independent in ROMS
- * (RefineSteps vs RefineScale) and in ERF. remora.dt_ref_ratio takes one value for all
- * levels or one per level; setting it to 1 runs the recursive driver in lockstep, which is
- * how the subcycled path is compared against timeStepML.
+ * Set how many steps each level takes per parent step, from remora.dt_ref_ratio.
  *
  * @param[in   ] nlevs_max  max_level + 1
  */
@@ -2726,6 +2700,8 @@ REMORA::set_nsubsteps (int nlevs_max)
         nsubsteps[lev] = MaxRefRatio(lev-1);
     }
 
+    // Defaults to the spatial ratio, but the two are independent in ROMS (RefineSteps
+    // against RefineScale) and in ERF. One value for all levels or one per level.
     if (max_level > 0) {
         ParmParse pp("remora");
         int count = pp.countval("dt_ref_ratio");
@@ -2817,15 +2793,13 @@ REMORA::AverageDownTo (int crse_lev)
 
     if (check_cf_metrics_flag) { check_cf_metrics(crse_lev); }
 
-    // Hand the child's 2D momentum back to the parent, as ROMS's fine2coarse does. The
-    // parent's next advance_2d reads ubar(krhs), krhs = istep % 2, to form DUon, so this
-    // feeds its next barotropic step: dropping it moves the Dogbone x-velocity by 9%.
-    // Subcycling only, so timeStepML keeps the behaviour its answers were recorded with.
+    // Hand the child's 2D momentum back, as ROMS's fine2coarse does. The parent's next
+    // advance_2d reads ubar(krhs) to form DUon, so dropping this moves Dogbone's x-velocity
+    // by 9%. Subcycling only: timeStepML keeps the behaviour its answers were recorded with.
     if (do_substep) {
-        // Only components 0 and 1. ubar's three components are leapfrog slots that rotate
-        // per level, so the parent's component n need not hold the same time level as the
-        // child's. These two are exempt: update_massflux_3d has just set both to the same
-        // vertically integrated velocity, so averaging them cannot mix time levels.
+        // Components 0 and 1 only. The three are leapfrog slots rotating per level, so the
+        // two levels need not agree on which holds what -- but update_massflux_3d has just
+        // set both of these to the same velocity, so averaging them cannot mix time levels.
         for (int icomp = 0; icomp < 2; ++icomp) {
             MultiFab ubar_f(*vec_ubar[crse_lev+1], make_alias, icomp, 1);
             MultiFab ubar_c(*vec_ubar[crse_lev  ], make_alias, icomp, 1);
@@ -2836,10 +2810,9 @@ REMORA::AverageDownTo (int crse_lev)
             average_down_faces(vbar_f, vbar_c, refRatio(crse_lev), 0);
         }
 
-        // zeta is deliberately absent. Zt_avg1, averaged down above, already carries the
-        // free surface: set_zeta_to_Ztavg overwrites all three zeta components from it at
-        // the top of the next step, and stretch_transform reads it rather than zeta. So
-        // averaging zeta here writes something nothing reads.
+        // zeta is deliberately absent: set_zeta_to_Ztavg overwrites all three of its
+        // components from Zt_avg1 next step and stretch_transform reads Zt_avg1 anyway, so
+        // averaging it here would write something nothing reads.
     }
 
     stretch_transform(crse_lev);

@@ -75,9 +75,6 @@ REMORA::Advance (int lev, Real time, Real dt_lev, int /*iteration*/, int /*ncycl
  * Store this level's old and new state in the coarse/fine fill patchers so the next finer
  * level can interpolate its contact points to its own sub-times.
  *
- * Called at the end of Advance, once the new state is valid. The parent completes its whole
- * step first, so {t_old, t_new} brackets every time the child asks for.
- *
  * @param[in] lev            level of refinement
  * @param[in] time           simulation time at start of the step just taken
  * @param[in] dt_lev         baroclinic time step at level
@@ -85,6 +82,8 @@ REMORA::Advance (int lev, Real time, Real dt_lev, int /*iteration*/, int /*ncycl
 void
 REMORA::register_coarse_data (int lev, Real time, Real dt_lev)
 {
+    // At the end of Advance, once the new state is valid. The parent completes its whole
+    // step before any child substep, so {t_old, t_new} brackets every time the child asks for.
     if (lev >= finest_level) { return; }
 
     if (cf_width > 0) {

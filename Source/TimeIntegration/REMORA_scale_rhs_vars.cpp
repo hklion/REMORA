@@ -5,14 +5,13 @@ using namespace amrex;
 /**
  * Scale one level's RHS momentum terms by 1/cell area.
  *
- * Per level, not over all levels: /cff then *cff is not an identity in floating point, so
- * scaling every level on every level's step perturbs untouched levels once per parent step.
- *
  * @param[in] lev            level of refinement
  */
 void
 REMORA::scale_rhs_vars (int lev)
 {
+    // Per level, not over all levels: /cff then *cff is not an identity in floating point,
+    // so scaling every level on every level's step perturbs untouched ones.
     MultiFab& mf_cons = *cons_new[lev];
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())

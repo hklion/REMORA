@@ -7,22 +7,16 @@
 using namespace amrex;
 
 /**
- * Report the timestep hierarchy across levels.
- *
- * A refined level has two nested ratios: nsubsteps[lev] baroclinic steps per parent step,
- * each subdivided ndtfast times. ndtfast is shared by all levels, so dtfast = dt/ndtfast
- * shrinks with dt -- what the barotropic CFL wants, since it picks up the same refinement
- * factor as the advective limit.
- *
- * Nothing else prints the derived hierarchy, and no regression test exercises estTimeStep
- * (every input sets remora.fixed_dt), so this is the practical check on dt and dtfast.
- *
- * Must be called after ComputeDt: dt is seeded to bogus_large_value.
+ * Report the per-level timestep hierarchy: nsubsteps[lev] baroclinic steps per parent step,
+ * each subdivided ndtfast times. Must follow ComputeDt, since dt is seeded to
+ * bogus_large_value.
  */
 void
 REMORA::print_timestep_hierarchy () const
 {
-    // No hierarchy to report, and estTimeStep's verbose output already covers dt.
+    // No hierarchy to report, and estTimeStep's verbose output already covers dt. Nothing
+    // else prints the derived values, and no test exercises estTimeStep -- every input sets
+    // remora.fixed_dt -- so this is the practical check that dt and dtfast came out right.
     if (max_level == 0) { return; }
 
     amrex::Print() << "\n Timestep hierarchy"

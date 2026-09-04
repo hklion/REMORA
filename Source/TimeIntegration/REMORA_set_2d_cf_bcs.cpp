@@ -8,13 +8,8 @@ namespace {
 }
 
 /**
- * Store this level's barotropic mass flux per unit cell edge length, for a subcycled finer
- * level to interpolate.
- *
- * DU_avg2 is the fast-time-averaged flux D*ubar*on_u through a cell face, in m^3/s. Dividing
- * by on_u leaves D*ubar: a finer face multiplies its own edge length back in, so the fine
- * fluxes sum to the coarse one whenever the fine edges tile the coarse edge. Passing ubar
- * across, or the raw flux, loses that.
+ * Store this level's barotropic mass flux per unit cell edge length, for a finer level to
+ * interpolate.
  *
  * @param[in] lev            level of refinement
  */
@@ -41,6 +36,9 @@ REMORA::store_2d_flux (int lev)
         Box ubx = mfi.grownnodaltilebox(0,IntVect(NGROW,NGROW,0));
         ubx.makeSlab(2,0);
 
+        // DU_avg2 is the flux through a whole face, m^3/s. Dividing by on_u leaves D*ubar,
+        // so a finer face can multiply its own edge length back in and the fine fluxes sum
+        // to the coarse one. Passing ubar across, or the raw flux, loses that.
         ParallelFor(ubx, [=] AMREX_GPU_DEVICE (int i, int j, int)
         {
             Real on_u = two / (pn(i,j,0) + pn(i-1,j,0));
@@ -70,23 +68,13 @@ REMORA::store_2d_flux (int lev)
 
 /**
  * Set the normal barotropic velocity on this level's coarse-fine interface from the parent's
- * time-averaged mass flux, the way ROMS does in put_refine2d (nesting.F).
+ * time-averaged mass flux, as ROMS does in put_refine2d (nesting.F):
  *
  *     ubar_f = Dubar_c / D_f,    D_f = 0.5*(h + zeta)_{i-1} + 0.5*(h + zeta)_i
  *
- * Interpolating the parent's ubar instead would not conserve mass: the fine fluxes would not
- * sum to the coarse flux they replace.
- *
- * Runs after the fill patchers have set the interface from the parent's ubar, overwriting the
- * normal faces they just wrote, and has to run every fast step. Unlike a ROMS contact point,
- * which sits on the finer grid's physical perimeter, these faces are interior to the fine
- * level and the barotropic solver rewrites them. What is held constant over the step is the
- * flux, not the act of imposing it.
- *
- * Only momentum needs this. The free surface is already handled: setup_step calls
- * set_zeta_to_Ztavg, which sets all three zeta components to Zt_avg1 over the grown box at the
- * top of every baroclinic step, so the zeta a finer level interpolates at its contact points is
- * the parent's fast-time average. ROMS does the same, with set_zeta ahead of put_refine2d.
+ * Momentum only. setup_step resets all three zeta components to Zt_avg1, so what a finer
+ * level interpolates for the free surface is already the parent's fast-time average -- as in
+ * ROMS, where set_zeta runs ahead of put_refine2d.
  *
  * @param[in] lev            level of refinement
  * @param[in] time           simulation time to interpolate the parent's flux to
@@ -100,6 +88,9 @@ REMORA::set_2d_cf_bcs (int lev, Real time, int know, int knew)
 
     BL_PROFILE("REMORA::set_2d_cf_bcs()");
 
+    // Overwrites what the fill patchers just set from the parent's ubar, which would not
+    // conserve mass. Every fast step: unlike a ROMS contact point on a physical perimeter,
+    // these faces are interior and the barotropic solver rewrites them.
     const int set_mask = FPr_Dubar[lev-1].GetSetMaskVal();
 
     MultiFab Dubar_cf(vec_Dubar_new[lev]->boxArray(), vec_Dubar_new[lev]->DistributionMap(),
