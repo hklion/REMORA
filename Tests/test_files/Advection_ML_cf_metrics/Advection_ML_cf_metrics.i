@@ -48,7 +48,7 @@ remora.check_file      = chk        # root name of checkpoint file
 remora.check_int       = -57600      # number of timesteps between checkpoints
 
 # PLOTFILES
-# No gold file yet, so skip plotfile output.
+# Nothing compares plotfiles here, so do not write any.
 remora.plot_file     = plt        # prefix of plotfile name
 remora.plot_int      = -1
 # Dye is opt-in (remora.nscalar defaults to 0), and this case advects a dye blob, so ask for one.

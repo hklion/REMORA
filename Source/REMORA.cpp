@@ -2585,8 +2585,8 @@ REMORA::clamp_reflux (int lev, const MultiFab& pre_reflux)
  *
  * That is exact when pm and pn are uniform, and not guaranteed otherwise -- on the NetCDF path
  * a finer level takes its metrics from an interpolation of the parent's, scaled by the
- * refinement ratio, which need not preserve the sum. Everything Phase 3 does rests on this, so
- * measure it rather than assume it.
+ * refinement ratio, which need not preserve the sum. The imposed flux cannot be conservative
+ * without it, so measure it rather than assume it.
  *
  * @param[in   ] crse_lev  coarse side of the interface
  */

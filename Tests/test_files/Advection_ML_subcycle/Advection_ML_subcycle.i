@@ -1,9 +1,9 @@
 # ------------------  INPUTS TO MAIN PROGRAM  -------------------
 #
 # Advection_ML with time subcycling: level 1 takes 2 steps of dt[0]/2 per level-0 step via
-# the recursive REMORA::timeStep. The barotropic coarse-to-fine treatment is unfinished, so
-# there is no gold file -- this lane only asserts the driver runs and level 1 gets dt[0]/2.
-# See Advection_ML for the blessed lockstep lane.
+# the recursive REMORA::timeStep. amr.do_substep is not validated for science runs, so its
+# answers carry no gold file -- this lane asserts only that the driver runs and that level 1
+# gets dt[0]/2. See Advection_ML for the lockstep lane and its baseline.
 #
 remora.prob_name = Advection
 
@@ -42,7 +42,7 @@ remora.check_file      = chk        # root name of checkpoint file
 remora.check_int       = -57600      # number of timesteps between checkpoints
 
 # PLOTFILES
-# No gold file yet, so skip plotfile output.
+# Nothing compares plotfiles here, so do not write any.
 remora.plot_file     = plt        # prefix of plotfile name
 remora.plot_int      = -1
 # Dye is opt-in (remora.nscalar defaults to 0), and this case advects a dye blob, so ask for one.

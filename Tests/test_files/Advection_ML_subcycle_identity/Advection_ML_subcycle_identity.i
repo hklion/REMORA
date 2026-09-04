@@ -12,7 +12,7 @@
 # coarse barotropic step on a twice-finer grid and goes unstable, which would test the CFL
 # limit rather than the drivers.
 #
-# This still holds with set_2d_cf_bcs active only because Advection has a flat bottom: D is
+# This holds with set_2d_cf_bcs active only because Advection has a flat bottom: D is
 # the same either side of the interface, so the mass-flux form reduces to the interpolation it
 # replaces. On varying bathymetry the two differ and ratio 1 would no longer match lockstep --
 # correctly, since the 2D coupling is then genuinely different. See DogboneAnalytic_ML_subcycle.

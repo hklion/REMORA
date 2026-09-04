@@ -268,7 +268,7 @@ function(add_test_conservation TEST_NAME INPUT_NAME TEST_EXE OPTIONS)
 endfunction(add_test_conservation)
 
 # Run must succeed AND its log must contain LOG_SUBSTRING. For a code path whose answers are
-# not yet worth blessing into a gold file, but which must keep reaching the named behavior.
+# not worth blessing into a gold file, but which must keep reaching the named behavior.
 function(add_test_log TEST_NAME TEST_EXE LOG_SUBSTRING)
 
     setup_test()
@@ -380,9 +380,9 @@ add_test_r(DogboneAnalytic_MLquad       "remora_exec" "plt_ml_quad00010")
 #=============================================================================
 # Time subcycling on refined levels (amr.do_substep)
 #
-# The barotropic coarse-to-fine coupling is not done, so these answers get no gold file.
-# This lane keeps the opt-in path running and asserts level 1 receives dt[0]/2 (fixed_dt =
-# 100, ref_ratio = 2). Promote to add_test_r once the 2D contact treatment lands.
+# These answers carry no gold file: amr.do_substep is not yet validated for science runs, so
+# blessing its output would fix numbers nobody is prepared to defend. The lanes assert
+# behaviour instead -- here, that level 1 receives dt[0]/2 (fixed_dt = 100, ref_ratio = 2).
 #=============================================================================
 add_test_log(Advection_ML_subcycle      "remora_exec" "with dt = 50")
 
@@ -438,7 +438,7 @@ add_test_conservation(DogboneAnalytic_ML_conservation DogboneAnalytic_ML_subcycl
 # The assumption underneath all of the above: the fine cell edges have to sum to the coarse
 # edge, or the mass flux imposed at the interface cannot be conservative whatever else is
 # right. check_cf_metrics aborts past remora.check_cf_tol, so reaching the printed line is the
-# assertion. Measured at 0 on this ratio-2 analytic grid and 1.4e-16 on Dogbone's ratio 3; it
+# assertion. It measures 0 on this ratio-2 analytic grid and 1.4e-16 on Dogbone's ratio 3, but
 # is not guaranteed on the NetCDF path, where a finer level interpolates its metrics from the
 # parent's and scales them by the refinement ratio.
 add_test_log(Advection_ML_cf_metrics "remora_exec" "CF edge tiling")

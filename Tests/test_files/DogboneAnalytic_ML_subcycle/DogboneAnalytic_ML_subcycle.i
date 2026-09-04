@@ -29,9 +29,9 @@ remora.ndtfast = 20
 # REFINEMENT / REGRIDDING
 # TIME SUBCYCLING
 # Level 1 takes 3 steps of dt[0]/3 per level-0 step. Unlike Advection_ML_subcycle this case
-# has varying bathymetry, so D differs across the interface and set_2d_cf_bcs actually bites:
-# the mass-flux form corrects ubar by ~0.02 m/s against interpolating the parent's ubar. On a
-# flat bottom the two coincide and the lane proves nothing.
+# has varying bathymetry, so D differs across the interface and set_2d_cf_bcs bites: the
+# mass-flux form corrects ubar by ~0.02 m/s against interpolating the parent's ubar. On a flat
+# bottom the two coincide and the lane proves nothing.
 amr.do_substep = 1
 
 amr.max_level       = 1       # maximum level number allowed
@@ -46,7 +46,7 @@ remora.check_file      = chk        # root name of checkpoint file
 
 # PLOTFILES
 remora.plot_file     = plt_ml        # prefix of plotfile name
-remora.plot_int      = -1            # no gold file yet
+remora.plot_int      = -1            # nothing compares plotfiles here
 remora.plot_vars_3d  = salt temp x_velocity y_velocity z_velocity
 remora.plotfile_type = amrex
 remora.expand_plotvars_to_unif_rr = 1
