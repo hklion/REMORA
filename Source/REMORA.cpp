@@ -2587,7 +2587,7 @@ REMORA::average_down_with_grow_cells (int crse_lev, Vector<std::unique_ptr<Multi
                 MultiFab& dst = (which == 0) ? fmsk : cmsk;
                 const MultiFab& src = *vec_mskr_full_domain[mlev];
                 // One ring narrower than the rho mask, since the stencil reaches back a cell.
-                const IntVect ng = max(src.nGrowVect() - IntVect(1,1,0), IntVect(0));
+                const IntVect ng = max(src.nGrowVect() - nd, IntVect(0));
                 dst.define(convert(src.boxArray(), nd), src.DistributionMap(), 1, ng);
                 dst.setVal(one);
                 for (MFIter mfi(dst, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
@@ -2607,8 +2607,7 @@ REMORA::average_down_with_grow_cells (int crse_lev, Vector<std::unique_ptr<Multi
                                          : vec_mskr_full_domain[crse_lev+1]->const_arrays();
         auto const& cmskma = (idir >= 0) ? cmsk.const_arrays()
                                          : vec_mskr_full_domain[crse_lev]->const_arrays();
-        const int ncomp = (idir >= 0) ? 1 : vec_mf[crse_lev]->nComp();
-        ParallelFor(*vec_mf[crse_lev], nghost_crse, ncomp,
+        ParallelFor(*vec_mf[crse_lev], nghost_crse, vec_mf[crse_lev]->nComp(),
                 [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k, int n) noexcept
         {
             if (idir < 0) {
@@ -2630,13 +2629,13 @@ REMORA::average_down_with_grow_cells (int crse_lev, Vector<std::unique_ptr<Multi
             amrex_avgdown(i,j,k,n,crsema[box_no],finema[box_no],0,0,ref_ratio_crse);
         });
     } else if (index_type[0]==1 and index_type[1]==0) {
-        ParallelFor(*vec_mf[crse_lev], nghost_crse, 1,
+        ParallelFor(*vec_mf[crse_lev], nghost_crse, vec_mf[crse_lev]->nComp(),
                 [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k, int n) noexcept
         {
             amrex_avgdown_faces(i,j,k,n,crsema[box_no],finema[box_no],0,0,ref_ratio_crse,0);
         });
     } else if (index_type[0]==0 and index_type[1]==1) {
-        ParallelFor(*vec_mf[crse_lev], nghost_crse, 1,
+        ParallelFor(*vec_mf[crse_lev], nghost_crse, vec_mf[crse_lev]->nComp(),
                 [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k, int n) noexcept
         {
             amrex_avgdown_faces(i,j,k,n,crsema[box_no],finema[box_no],0,0,ref_ratio_crse,1);
