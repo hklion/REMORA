@@ -664,7 +664,8 @@ public:
     /** \brief advance a single level for a single time step */
     void Advance (int lev, amrex::Real time, amrex::Real dt_lev, int iteration, int ncycle);
 
-    /** \brief register this level's completed step as the coarse bracket for the next finer level */
+    /** \brief register this level's completed step as the coarse bracket the next finer
+     *         level interpolates within */
     void register_coarse_data (int lev, amrex::Real time, amrex::Real dt_lev);
 
     /** \brief set this level's barotropic contact points from its parent, mass-conservingly */

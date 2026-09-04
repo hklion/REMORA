@@ -275,7 +275,7 @@ REMORA::Evolve ()
     BL_PROFILE_VAR("REMORA::Evolve()",evolve);
     Real cur_time = t_new[0];
 
-    // istep[0] advances inside the loop, so latch the starting value.
+    // istep[0] advances inside the loop, so keep the value it started at.
     const int first_step = istep[0];
 
     // Levels appear as tagging fires, so reprint the hierarchy when finest_level changes.
@@ -299,8 +299,8 @@ REMORA::Evolve ()
         int iteration = 1;
         auto dEvolveTime0 = amrex::second();
 
-        // timeStep recurses into finer levels nsubsteps[lev+1] times. timeStepML is the
-        // path the multi-level gold files were generated against, so keep it unless asked.
+        // timeStep recurses into finer levels nsubsteps[lev+1] times; timeStepML advances
+        // every level once through one shared barotropic loop.
         if (max_level == 0 || do_substep) {
             timeStep(lev, cur_time, iteration);
         }
@@ -2271,11 +2271,9 @@ REMORA::ReadParameters ()
     pp.queryAdd("do_substep", do_substep);
 
     if (!do_substep && max_level > 0) {
-        amrex::Print() << "NOTE: remora.do_substep = 0 selects the lockstep driver, which conserves less\n"
-                       << "      well across a coarse-fine interface than the default: volume drift\n"
-                       << "      2.0e-6 against 3.1e-10 on DogboneAnalytic. Its shared barotropic loop\n"
-                       << "      cannot hand a finer level the parent's completed mass flux, so the\n"
-                       << "      interface treatment that conserves is unavailable to it." << std::endl;
+        amrex::Print() << "NOTE: remora.do_substep = 0 selects the lockstep driver. It cannot\n"
+                       << "      impose the parent's mass flux at a coarse-fine interface, so it\n"
+                       << "      conserves volume less well: 2.0e-6 against 3.1e-10 on Dogbone.\n";
     }
 
     // See set_2d_cf_bcs. Only has an effect when remora.do_substep = 1.
@@ -2822,7 +2820,7 @@ REMORA::AverageDownTo (int crse_lev)
     // Hand the child's 2D momentum back to the parent, as ROMS's fine2coarse does. The
     // parent's next advance_2d reads ubar(krhs), krhs = istep % 2, to form DUon, so this
     // feeds its next barotropic step: dropping it moves the Dogbone x-velocity by 9%.
-    // Gated because the lockstep answers were blessed without it.
+    // Subcycling only, so timeStepML keeps the behaviour its answers were recorded with.
     if (do_substep) {
         // Only components 0 and 1. ubar's three components are leapfrog slots that rotate
         // per level, so the parent's component n need not hold the same time level as the

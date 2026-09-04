@@ -1,9 +1,8 @@
 # ------------------  INPUTS TO MAIN PROGRAM  -------------------
 #
-# Advection_ML with time subcycling: level 1 takes 2 steps of dt[0]/2 per level-0 step via
-# the recursive REMORA::timeStep. remora.do_substep is not validated for science runs, so its
-# answers carry no gold file -- this lane asserts only that the driver runs and that level 1
-# gets dt[0]/2. See Advection_ML for the lockstep lane and its baseline.
+# Advection_ML with time subcycling stated explicitly rather than taken from the default.
+# Level 1 takes 2 steps of dt[0]/2 per level-0 step via the recursive REMORA::timeStep. This
+# lane asserts that subcycling engages at all; Advection_ML pins the answers.
 #
 remora.prob_name = Advection
 

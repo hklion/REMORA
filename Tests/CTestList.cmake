@@ -380,15 +380,16 @@ add_test_r(DogboneAnalytic_MLquad       "remora_exec" "plt_ml_quad00010")
 #=============================================================================
 # Time subcycling on refined levels (remora.do_substep)
 #
-# These answers carry no gold file: remora.do_substep is not yet validated for science runs, so
-# blessing its output would fix numbers nobody is prepared to defend. The lanes assert
-# behaviour instead -- here, that level 1 receives dt[0]/2 (fixed_dt = 100, ref_ratio = 2).
+# The default path's answers are pinned by Advection_ML and the two DogboneAnalytic_ML gold
+# lanes. These assert behaviour those cannot: that subcycling actually engages, and that the
+# two drivers still agree where they should. Here, level 1 receives dt[0]/2 (fixed_dt = 100,
+# ref_ratio = 2).
 #=============================================================================
 add_test_log(Advection_ML_subcycle      "remora_exec" "with dt = 50")
 
 # The load-bearing one: at a timestep ratio of 1 the recursive driver must reproduce
-# timeStepML, separating a broken refactor from the answer changes subcycling legitimately
-# makes. Keep this passing through every later phase.
+# timeStepML, separating a broken driver from the answer changes subcycling legitimately
+# makes. It is also the only thing still holding lockstep answers in place.
 # do_reflux is off in the subcycled run because it is a correction the lockstep driver does
 # not apply at all, so leaving it on would compare a feature rather than the drivers. It
 # moves the tracer by 3e-4 here, well clear of the tolerance.

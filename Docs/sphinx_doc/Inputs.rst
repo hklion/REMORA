@@ -403,14 +403,16 @@ Notes
 -  **amr.max_grid_size** must be a multiple of **amr.blocking_factor**
    at every level
 
--  **remora.do_substep** = 1 is the default. **amr.do_substep** is the original spelling and
-   still works, but amrex owns that namespace; setting both is an error. Setting it to 0 selects
-   the lockstep driver, which
-   advances every level once per step through one shared barotropic loop. That path is kept for
-   comparison against answers predating subcycling and is expected to be deprecated. It conserves
-   less well at a coarse-fine interface -- volume drift 2.0e-6 against 3.1e-10 on DogboneAnalytic
-   -- because its shared barotropic loop cannot hand a finer level the parent's completed mass
-   flux, so the interface treatment that conserves is unavailable to it.
+-  **remora.do_substep** = 1 is the default, and advances a finer level
+   **remora.dt_ref_ratio** times per parent step. Setting it to 0 selects the lockstep driver,
+   which advances every level once per step through one shared barotropic loop. Because that
+   loop cannot hand a finer level the parent's completed mass flux, it cannot impose that flux
+   at a coarse-fine interface and conserves volume less well: drift of 2.0e-6 against 3.1e-10 on
+   DogboneAnalytic. It is kept for comparison against answers predating subcycling and is
+   expected to be deprecated.
+
+-  **amr.do_substep** is the original spelling of the above and still works, but amrex owns that
+   namespace. Setting both is an error.
 
 -  **remora.dt_ref_ratio** only has an effect when **remora.do_substep** = 1. It defaults to the
    spatial refinement ratio but need not equal it. Setting it to 1 advances every level with the
