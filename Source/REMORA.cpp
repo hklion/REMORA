@@ -2542,6 +2542,37 @@ REMORA::ensure_full_domain_masks (int top_lev)
     }
 }
 
+namespace {
+/**
+ * Build a face-centered mask from a rho-point one, following ROMS set_masks.F:
+ * msku = mskr(i-1,j)*mskr(i,j) and mskv = mskr(i,j-1)*mskr(i,j).
+ *
+ * Derived where it is needed rather than stored. Only the full-domain average-down wants
+ * these, at most once per level during initialization, so a stored pair would be two more
+ * arrays to keep in step with the rho mask for no measurable saving.
+ */
+void derive_face_mask (const MultiFab& mskr, MultiFab& mskf, int idir)
+{
+    const IntVect nd = (idir == 0) ? IntVect(1,0,0) : IntVect(0,1,0);
+    // One ring narrower than the rho mask in the normal direction, where the stencil reaches.
+    const IntVect ng = max(mskr.nGrowVect() - nd, IntVect(0));
+    mskf.define(convert(mskr.boxArray(), nd), mskr.DistributionMap(), 1, ng);
+    mskf.setVal(one);
+
+    for (MFIter mfi(mskf, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+        const Box& bx = mfi.growntilebox();
+        Array4<      Real> const& mf = mskf.array(mfi);
+        Array4<const Real> const& mr = mskr.const_array(mfi);
+        const int l_idir = idir;
+        ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+        {
+            mf(i,j,k) = (l_idir == 0) ? mr(i-1,j,0) * mr(i,j,0)
+                                      : mr(i,j-1,0) * mr(i,j,0);
+        });
+    }
+}
+} // namespace
+
 /**
  * Average a full-domain field from crse_lev+1 onto crse_lev, grow cells included.
  *
@@ -2575,33 +2606,11 @@ REMORA::average_down_with_grow_cells (int crse_lev, Vector<std::unique_ptr<Multi
         AMREX_ALWAYS_ASSERT(vec_mskr_full_domain[crse_lev]->DistributionMap() ==
                             vec_mf[crse_lev]->DistributionMap());
 
-        // Face masks are derived rather than stored: nothing else needs them, and a derived
-        // one cannot drift out of sync with the rho mask. ROMS set_masks.F's rule is
-        // msku = mskr(i-1,j)*mskr(i,j).
         const int idir = (index_type[0]==1) ? 0 : ((index_type[1]==1) ? 1 : -1);
         MultiFab fmsk, cmsk;
         if (idir >= 0) {
-            const IntVect nd = (idir == 0) ? IntVect(1,0,0) : IntVect(0,1,0);
-            for (int which = 0; which < 2; ++which) {
-                const int mlev = crse_lev + 1 - which;
-                MultiFab& dst = (which == 0) ? fmsk : cmsk;
-                const MultiFab& src = *vec_mskr_full_domain[mlev];
-                // One ring narrower than the rho mask, since the stencil reaches back a cell.
-                const IntVect ng = max(src.nGrowVect() - nd, IntVect(0));
-                dst.define(convert(src.boxArray(), nd), src.DistributionMap(), 1, ng);
-                dst.setVal(one);
-                for (MFIter mfi(dst, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
-                    const Box& bx = mfi.growntilebox();
-                    Array4<      Real> const& mf = dst.array(mfi);
-                    Array4<const Real> const& mr = src.const_array(mfi);
-                    const int l_idir = idir;
-                    ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
-                    {
-                        mf(i,j,k) = (l_idir == 0) ? mr(i-1,j,0) * mr(i,j,0)
-                                                  : mr(i,j-1,0) * mr(i,j,0);
-                    });
-                }
-            }
+            derive_face_mask(*vec_mskr_full_domain[crse_lev+1], fmsk, idir);
+            derive_face_mask(*vec_mskr_full_domain[crse_lev  ], cmsk, idir);
         }
         auto const& fmskma = (idir >= 0) ? fmsk.const_arrays()
                                          : vec_mskr_full_domain[crse_lev+1]->const_arrays();

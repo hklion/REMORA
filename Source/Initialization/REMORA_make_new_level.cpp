@@ -1066,54 +1066,6 @@ REMORA::update_nodal_masks (int lev)
 }
 
 /**
- * Check a grid file's mask_u and mask_v against the mask_rho product ROMS set_masks.F defines.
- *
- * Only the level-0 read takes them from a file; every other lane derives them from mask_rho.
- * Verify the file agrees, so the two cannot disagree about where a face is closed.
- *
- * @param[in   ] lev    level to operate on
- */
-void
-REMORA::verify_file_nodal_masks (int lev)
-{
-    ReduceOps<ReduceOpSum, ReduceOpSum> reduce_op;
-    ReduceData<Long, Long> reduce_data(reduce_op);
-    using ReduceTuple = typename decltype(reduce_data)::Type;
-
-    for ( MFIter mfi(*vec_mskr[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi )
-    {
-        Array4<const Real> const& mskr = vec_mskr[lev]->const_array(mfi);
-        Array4<const Real> const& msku = vec_msku[lev]->const_array(mfi);
-        Array4<const Real> const& mskv = vec_mskv[lev]->const_array(mfi);
-
-        Box bx = mfi.tilebox(); bx.makeSlab(2,0);
-
-        reduce_op.eval(bx, reduce_data, [=] AMREX_GPU_DEVICE (int i, int j, int k)
-            -> ReduceTuple
-        {
-            const Real bad_u = amrex::Math::abs(msku(i,j,k) - mskr(i-1,j  ,k) * mskr(i,j,k));
-            const Real bad_v = amrex::Math::abs(mskv(i,j,k) - mskr(i  ,j-1,k) * mskr(i,j,k));
-            return {static_cast<Long>(bad_u > Real(1.0e-12)),
-                    static_cast<Long>(bad_v > Real(1.0e-12))};
-        });
-    }
-
-    ReduceTuple hv = reduce_data.value(reduce_op);
-    Long nbad_u = amrex::get<0>(hv);
-    Long nbad_v = amrex::get<1>(hv);
-    ParallelDescriptor::ReduceLongSum(nbad_u);
-    ParallelDescriptor::ReduceLongSum(nbad_v);
-
-    if (nbad_u > 0 || nbad_v > 0) {
-        amrex::Abort("Land mask on level " + std::to_string(lev) + " is inconsistent: " +
-                     std::to_string(nbad_u) + " mask_u and " + std::to_string(nbad_v) +
-                     " mask_v points differ from the mask_rho product ROMS set_masks.F "
-                     "defines (umask = rmask(i-1,j)*rmask(i,j), vmask likewise). Regenerate "
-                     "the grid file's staggered masks from its mask_rho.");
-    }
-}
-
-/**
  * @param[in   ] lev    level to operate on
  */
 void

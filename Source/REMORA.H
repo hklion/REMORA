@@ -1127,8 +1127,6 @@ public:
     /** \brief Rebuild the u-, v- and psi-point masks from vec_mskr and fill their ghosts */
     void update_nodal_masks (int lev);
 
-    /** \brief Check a grid file's mask_u and mask_v against the mask_rho product */
-    void verify_file_nodal_masks (int lev);
 
     /** \brief Check every level pair's masks against each other, and every level's mask
      * values, reporting according to remora.mask_consistency */

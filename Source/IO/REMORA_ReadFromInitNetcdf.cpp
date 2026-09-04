@@ -575,16 +575,16 @@ read_coriolis_from_netcdf (int /*lev*/,
  * @param domain          simulation domain
  * @param fname           file name to read from
  * @param NC_mskr_fab     container for rho-point land/sea mask data
- * @param NC_msku_fab     container for u-point land/sea mask data
- * @param NC_mskv_fab     container for v-point land/sea mask data
+ *
+ * Only mask_rho is read. The u-, v- and psi-point masks are derived from it as ROMS
+ * set_masks.F defines them, so a file whose staggered masks disagree with its mask_rho cannot
+ * put the two out of step.
  */
 void
 read_masks_from_netcdf (int /*lev*/,
                         const Box& domain,
                         const std::string& fname,
-                        FArrayBox& NC_mskr_fab,
-                        FArrayBox& NC_msku_fab,
-                        FArrayBox& NC_mskv_fab)
+                        FArrayBox& NC_mskr_fab)
 {
     amrex::Print() << "Loading masks from NetCDF file " << fname << std::endl;
 
@@ -593,8 +593,6 @@ read_masks_from_netcdf (int /*lev*/,
     Vector<enum NC_Data_Dims_Type> NC_dim_types;
 
     NC_fabs.push_back(&NC_mskr_fab )   ; NC_names.push_back("mask_rho")  ; NC_dim_types.push_back(NC_Data_Dims_Type::SN_WE); // 0
-    NC_fabs.push_back(&NC_msku_fab )   ; NC_names.push_back("mask_u")    ; NC_dim_types.push_back(NC_Data_Dims_Type::SN_WE); // 1
-    NC_fabs.push_back(&NC_mskv_fab )   ; NC_names.push_back("mask_v")    ; NC_dim_types.push_back(NC_Data_Dims_Type::SN_WE); // 2
 
     // Read the netcdf file and fill these FABs
     BuildFABsFromNetCDFFile<FArrayBox,Real>(domain, fname, NC_names, NC_dim_types, NC_fabs);

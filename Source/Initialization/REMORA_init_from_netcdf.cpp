@@ -55,11 +55,10 @@ void
 check_hires_dims_from_netcdf (const std::string& fname, const std::string& var_name,
                               const Box& domain, const IntVect& ngrow);
 
-/** \brief helper function for reading in land-sea masks from netcdf */
+/** \brief helper function for reading in the rho-point land-sea mask from netcdf */
 void
 read_masks_from_netcdf (int /*lev*/, const Box& domain, const std::string& fname,
-                       FArrayBox& NC_mskr_fab, FArrayBox& NC_msku_fab,
-                       FArrayBox& NC_mskv_fab);
+                       FArrayBox& NC_mskr_fab);
 
 /** \brief helper function to initialize state from netcdf */
 void
@@ -753,14 +752,11 @@ REMORA::init_masks_from_netcdf (int lev)
 {
     // *** FArrayBox's at this level for holding the INITIAL data
     Vector<FArrayBox> NC_mskr_fab     ; NC_mskr_fab.resize(num_boxes_at_level[lev]);
-    Vector<FArrayBox> NC_msku_fab     ; NC_msku_fab.resize(num_boxes_at_level[lev]);
-    Vector<FArrayBox> NC_mskv_fab     ; NC_mskv_fab.resize(num_boxes_at_level[lev]);
 
     for (int idx = 0; idx < num_boxes_at_level[lev]; idx++)
     {
         read_masks_from_netcdf(lev,boxes_at_level[lev][idx], nc_grid_file[lev][idx],
-                                    NC_mskr_fab[idx],NC_msku_fab[idx],
-                                    NC_mskv_fab[idx]);
+                                    NC_mskr_fab[idx]);
 
 #ifdef _OPENMP
 #pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
@@ -770,8 +766,6 @@ REMORA::init_masks_from_netcdf (int lev)
         for ( MFIter mfi(*cons_new[lev], false); mfi.isValid(); ++mfi )
         {
             FArrayBox &mskr_fab  = (*vec_mskr[lev])[mfi];
-            FArrayBox &msku_fab  = (*vec_msku[lev])[mfi];
-            FArrayBox &mskv_fab  = (*vec_mskv[lev])[mfi];
 
             //
             // FArrayBox to FArrayBox copy does "copy on intersection"
@@ -779,18 +773,13 @@ REMORA::init_masks_from_netcdf (int lev)
             //
 
             mskr_fab.template    copy<RunOn::Device>(NC_mskr_fab[idx]);
-            msku_fab.template    copy<RunOn::Device>(NC_msku_fab[idx]);
-            mskv_fab.template    copy<RunOn::Device>(NC_mskv_fab[idx]);
         } // mf
         } // omp
     } // idx
 
-    verify_file_nodal_masks(lev);
-    update_mskp(lev);
+    // Ghosts first: update_nodal_masks reaches mskr(i-1,j-1).
     vec_mskr[lev]->FillBoundary(geom[lev].periodicity());
-    vec_msku[lev]->FillBoundary(geom[lev].periodicity());
-    vec_mskv[lev]->FillBoundary(geom[lev].periodicity());
-    vec_mskp[lev]->FillBoundary(geom[lev].periodicity());
+    update_nodal_masks(lev);
 }
 
 /**
