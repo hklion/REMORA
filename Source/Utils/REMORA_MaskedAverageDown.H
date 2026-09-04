@@ -12,31 +12,27 @@
  * Ported from ROMS fine2coarse2d/fine2coarse3d in Nonlinear/nesting.F, the AreaAvg = .FALSE.
  * branch that every call site there uses:
  *
- *     num  = sum over the block of (fine value * fine mask)
- *     den  = sum over the block of min(1, fine mask)
+ *     num  = sum of (fine value * fine mask) over the fine points under the coarse one
+ *     den  = sum of min(1, fine mask) over the same
  *     crse = num/den * coarse mask
  *
- * The divisor is the count of WET fine points, not the number of points in the block, so a
- * coarse point that is only partly covered by water takes the mean of the water under it
- * rather than a value diluted toward zero by land. That is not conservative; ROMS makes the
- * same trade, on the grounds that a coastal tracer value pulled toward zero is worse than a
- * small loss of conservation. The coarse mask has the final say on wet or dry.
+ * Dividing by the count of wet fine points rather than by how many there are means a coarse
+ * point only partly covered by water takes the mean of that water, not a value diluted toward
+ * zero by land. That is not conservative; ROMS makes the same trade deliberately. The coarse
+ * mask has the final say on wet or dry.
  *
- * den == 0 under a wet coarse point would leave nothing to divide by. That cannot happen
- * once check_mask_consistency passes, so the kernels write zero and leave the diagnosis to
- * it rather than trying to report from a device kernel.
+ * den == 0 under a wet coarse point cannot happen once check_mask_consistency passes, so the
+ * kernels write zero rather than trying to diagnose it from a device kernel.
  *
- * A fully wet block has to reproduce amrex_avgdown and amrex_avgdown_faces bit for bit, or
- * every multilevel answer moves in its last bit. That is why the block is walked in the same
- * order AMReX walks it, why the mask multiplies the value before it is accumulated (m is
- * exactly 1.0 there, and x * 1.0 == x), and why the division is written as a multiplication
- * by the reciprocal (den is then exactly the point count, so 1.0/den is exactly AMReX's
- * volfrac). Writing num/den instead would differ in the last bit.
+ * Where every fine point is wet this has to reproduce amrex_avgdown and amrex_avgdown_faces
+ * bit for bit, or every multilevel answer moves in its last bit. Hence AMReX's iteration
+ * order, the mask multiplying the value before it is accumulated (x * 1.0 == x), and the
+ * division written as a multiplication by the reciprocal, which is exactly AMReX's volfrac.
+ * Writing num/den instead would differ in the last bit.
  */
 namespace REMORAMaskedAvgDown {
 
-/** Cell-centered fields: the whole ratio[0] x ratio[1] x ratio[2] block. The mask is 2D and
- *  is read on its z-slab. */
+/** Cell-centered fields: every fine cell under the coarse one. The mask is 2D, read at k=0. */
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void avgdown_masked (int i, int j, int k, int n,
                      amrex::Array4<amrex::Real>       const& crse,
@@ -68,8 +64,8 @@ void avgdown_masked (int i, int j, int k, int n,
                         : Real(0.0);
 }
 
-/** Face-centered fields: only the fine faces lying in the coarse face's own plane, which is
- *  the stencil amrex_avgdown_faces uses. "Wet" then means the flow really does cross here. */
+/** Face-centered fields: only the fine faces in the coarse face's own plane, the stencil
+ *  amrex_avgdown_faces uses, so "wet" means the flow really does cross here. */
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void avgdown_faces_masked (int i, int j, int k, int n,
                            amrex::Array4<amrex::Real>       const& crse,

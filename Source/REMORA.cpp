@@ -864,15 +864,8 @@ REMORA::set_analytic_vmix(int lev) {
 /**
  * Initialize the land-sea mask on this level.
  *
- * This mirrors set_bathymetry: the mask is specified exactly once -- on level 0, or, when a
- * high-resolution grid covering the entire domain is supplied, at hires_grid_level -- and
- * every other level is derived from that one specification. No level ever supplies its own
- * independent mask, so the levels cannot disagree about where the coastline is.
- *
- * The hires lane is what lets a refined level carry a better-resolved coastline. It also
- * closes a gap: with hires_grid_level > 0 the bathymetry already came from the fine grid
- * while the mask did not, so a run could have high-resolution depths under a coarse
- * coastline, and needed a level-0 grid file purely to supply that coarse mask.
+ * Mirrors set_bathymetry: the mask is specified once, on level 0 or at hires_grid_level, and
+ * every other level derived from it, so the levels cannot disagree about the coastline.
  *
  * @param[in   ] lev    level to operate on
  */
@@ -927,23 +920,20 @@ void
 REMORA::set_masks_averaged_down (int lev) {
     ParallelCopy(*vec_mskr[lev].get(), *vec_mskr_full_domain[lev].get(), 0, 0, 1,
             vec_mskr_full_domain[lev]->nGrowVect(),vec_mskr[lev]->nGrowVect());
-    // Deliberately not a FillPatch, unlike the bathymetry and grid-variable analogues: the
-    // interpolation from the coarser level that FillPatch would do for uncovered ghost cells
-    // is not piecewise constant, so it would put fractional values in a field that the rest
+    // Not a FillPatch, unlike the bathymetry analogue: its interpolation from the coarser
+    // level is not piecewise constant, so it would put fractional values in a mask the rest
     // of the code compares against 0 and 1 exactly.
     vec_mskr[lev]->FillBoundary(geom[lev].periodicity());
     update_nodal_masks(lev);
 }
 
 /**
- * Coarsen the full-domain rho-mask from crse_lev+1 down onto crse_lev, grow cells included,
- * so that a coarse cell is land only if every one of its fine cells is land.
+ * Coarsen the full-domain rho-mask from crse_lev+1 onto crse_lev, grow cells included, so a
+ * coarse cell is land only if every one of its fine cells is land.
  *
- * This is the counterpart of average_down_with_grow_cells, which cannot be used for a mask:
- * an arithmetic mean of a partially-wet block gives a fractional value, and the mask has to
- * stay exactly 0 or 1. Taking "wet if any fine cell is wet" also means the coarse level
- * never declares land where the fine grid found water, so no water resolved by the fine
- * grid is lost when the levels are coupled.
+ * average_down_with_grow_cells cannot be used: an arithmetic mean over a partly wet group of
+ * fine cells gives a fractional value, and the mask has to stay exactly 0 or 1. Taking the
+ * cell as wet also means the coarse level never declares land where the fine grid found water.
  *
  * @param[in   ] crse_lev   level to coarsen onto
  */
@@ -953,8 +943,7 @@ REMORA::coarsen_masks_with_grow_cells (int crse_lev)
     auto const& crsema = vec_mskr_full_domain[crse_lev]->arrays();
     auto const& finema = vec_mskr_full_domain[crse_lev+1]->const_arrays();
     auto ratio = refRatio(crse_lev);
-    // Same grow-cell budget as average_down_with_grow_cells; the mask is cell-centered, so
-    // there is no index-type correction to make.
+    // As in average_down_with_grow_cells, but cell-centered, so no index-type correction.
     auto nghost_crse = cum_ref_ratios[crse_lev];
     ParallelFor(*vec_mskr_full_domain[crse_lev], nghost_crse, 1,
             [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k, int n) noexcept
@@ -974,19 +963,17 @@ REMORA::coarsen_masks_with_grow_cells (int crse_lev)
 
 
 /**
- * Check the land-sea masks for what the rest of the code relies on, reporting according to
- * remora.mask_consistency (abort by default, or warn, or ignore).
+ * Check the land-sea masks for what the rest of the code relies on. Only runs when
+ * remora.check_mask_consistency is set; remora.mask_consistency picks abort or warn.
  *
- * Per level: masks hold only the values they are meant to, since the plotfile writer decides
- * what to blank by comparing them against 0 exactly; and no water cell has a non-positive
- * depth, which stretch_transform turns into quiet garbage rather than a crash.
+ * Per level: the masks hold only the values they are meant to, since the plotfile writer
+ * decides what to blank by comparing them against 0 exactly, and no water cell has a
+ * non-positive depth, which stretch_transform turns into quiet garbage rather than a crash.
  *
  * Per level pair, over the region the finer level covers: no coarse water point sits over
- * fine points that are all land, since the wet-only average-down would have nothing to
- * divide by. Coarsening by "wet if any fine cell is wet" makes that unreachable for cell
- * centers but not for faces -- a coarse u-face is open whenever both its cells are wet, and
- * their water can all sit away from the shared plane. Closing it would contradict the
- * coarsening rule, so the only fix is to move the refined grids.
+ * fine points that are all land, which would leave the average-down nothing to divide by.
+ * Coarsening makes that unreachable for cell centers but not for faces, since a coarse u-face
+ * is open whenever both its cells are wet and their water can sit away from the shared plane.
  */
 void
 REMORA::check_mask_consistency ()
@@ -1161,17 +1148,15 @@ REMORA::check_mask_consistency ()
 }
 
 /**
- * Coarsen the full-domain bathymetry from crse_lev+1 down onto crse_lev, grow cells included,
+ * Coarsen the full-domain bathymetry from crse_lev+1 onto crse_lev, grow cells included,
  * weighted by the land/sea mask.
  *
- * Same problem the state has: averaging a coarse cell's whole block mixes in whatever the grid
- * file holds under land, which on a ROMS grid is a fill value with no physical meaning. A cell
- * that is wet because some of its fine cells are wet should take the depth of that water.
- *
- * Where the entire block is land there is no water to average, but h still has to hold
- * something, so it falls back to the plain mean. A block that is entirely wet or entirely land
- * therefore reproduces average_down_with_grow_cells bit for bit -- see
- * REMORA_MaskedAverageDown.H for why the arithmetic is written this way.
+ * Averaging every fine cell would mix in whatever the grid file holds under land, which on a
+ * ROMS grid is a fill value with no physical meaning. A wet coarse cell should take the depth
+ * of the water under it. Where every fine cell is land there is none to average, but h still
+ * has to hold something, so that falls back to the plain mean -- which also makes an all-wet
+ * or all-land group reproduce average_down_with_grow_cells bit for bit. See
+ * REMORA_MaskedAverageDown.H for why the arithmetic is written the way it is.
  *
  * @param[in   ] crse_lev   level to coarsen onto
  */
@@ -2405,9 +2390,9 @@ REMORA::AverageDownTo (int crse_lev)
     const int flev = crse_lev + 1;
     const IntVect ratio = refRatio(crse_lev);
 
-    // The masks live on the levels' own layouts, but the kernels walk the coarsened-fine one,
-    // so pull the coarse masks onto it first. Convert the coarsened cell-centered BoxArray
-    // rather than coarsening a converted one: on a face BoxArray the two do not commute.
+    // The kernels walk the coarsened-fine layout, so pull the coarse masks onto it first.
+    // Convert the coarsened cell-centered BoxArray rather than coarsening a converted one:
+    // on a face BoxArray those two do not commute.
     const BoxArray cba = amrex::coarsen(vec_mskr[flev]->boxArray(), ratio);
     const DistributionMapping& dmf = vec_mskr[flev]->DistributionMap();
 
@@ -2440,7 +2425,7 @@ REMORA::AverageDownTo (int crse_lev)
  * Follows amrex::average_down's non-MFIter-safe branch, since coarsen(grids[flev]) does not
  * match grids[crse_lev] in general: compute onto a temporary on the coarsened-fine layout,
  * then ParallelCopy that onto the coarse level. The periodicity arguments match what
- * average_down and average_down_faces pass, so a run with no mask is unaffected.
+ * average_down and average_down_faces pass.
  *
  * @param[in   ] crse_lev   level to average down to
  * @param[in   ] S_fine     fine-level field
@@ -2512,7 +2497,7 @@ REMORA::refine_masks_with_grow_cells (int fine_lev)
         // amrex::coarsen floors rather than truncating, which is what the negative indices of
         // the grow cells need.
         finema[box_no](i,j,k,n) = crsema[box_no](amrex::coarsen(i, ratio[0]),
-                                                amrex::coarsen(j, ratio[1]), k, n);
+                                                 amrex::coarsen(j, ratio[1]), k, n);
     });
     Gpu::streamSynchronize();
 }
@@ -2520,9 +2505,8 @@ REMORA::refine_masks_with_grow_cells (int fine_lev)
 /**
  * Make sure the full-domain rho-mask exists on levels 0 through top_lev.
  *
- * The mask is specified once and every other level derived from it, so this only fills what
- * the hires_grid_level cascade has not: levels above it, by injection, and level 0 itself when
- * there is no high-resolution grid at all and the mask was given per-level instead.
+ * Only fills what the hires_grid_level coarsening has not: levels above it, by injection, and
+ * level 0 itself when there is no high-resolution grid and the mask was given per level.
  *
  * @param[in   ] top_lev   highest level that needs a mask
  */
@@ -2561,17 +2545,15 @@ REMORA::ensure_full_domain_masks (int top_lev)
 /**
  * Average a full-domain field from crse_lev+1 onto crse_lev, grow cells included.
  *
- * With use_mask, the mask-weighted mean of REMORAMaskedAvgDown is used instead of the plain
- * one, so that the initial state on a coarse cell only partly covered by water comes from that
- * water rather than from a mean diluted by land. That is the same formula AverageDownTo applies
- * every step, so the initial and the running state agree on what a land point holds.
- *
- * Leave use_mask off for grid metrics: a cell size is perfectly well defined under land, and
- * masking pm/pn would corrupt it.
+ * With use_mask this takes REMORAMaskedAvgDown's mask-weighted mean instead of the plain one,
+ * so the initial state on a coarse cell only partly covered by water comes from that water.
+ * It is the formula AverageDownTo applies every step, so the initial and the running state
+ * agree on what a land point holds. Leave use_mask off for grid metrics: a cell size is well
+ * defined under land, and masking pm/pn would corrupt it.
  *
  * @param[in   ] crse_lev   level to average data down to
  * @param[inout] vec_mf     vector over levels of multifabs containing data to average
- * @param[in   ] use_mask   weight by the land/sea mask rather than averaging the whole block
+ * @param[in   ] use_mask   weight by the land/sea mask rather than averaging every fine cell
  */
 void
 REMORA::average_down_with_grow_cells (int crse_lev, Vector<std::unique_ptr<MultiFab>>& vec_mf,
@@ -2585,17 +2567,17 @@ REMORA::average_down_with_grow_cells (int crse_lev, Vector<std::unique_ptr<Multi
 
     const bool masked = use_mask && (solverChoice.mask_type != MaskType::none);
     if (masked) {
-        // The full-domain arrays are one box per level on a matching DistributionMapping, so an
-        // MFIter over one indexes the other. Assert it rather than assume it.
+        // One box per level on a matching DistributionMapping, so an MFIter over one array
+        // indexes the other. Assert it rather than assume it.
         AMREX_ALWAYS_ASSERT(vec_mskr_full_domain[crse_lev] && vec_mskr_full_domain[crse_lev+1]);
         AMREX_ALWAYS_ASSERT(vec_mskr_full_domain[crse_lev]->boxArray().size() ==
                             vec_mf[crse_lev]->boxArray().size());
         AMREX_ALWAYS_ASSERT(vec_mskr_full_domain[crse_lev]->DistributionMap() ==
                             vec_mf[crse_lev]->DistributionMap());
 
-        // Face masks are derived here rather than stored: nothing else needs them, and a
-        // derived one cannot drift out of sync with the rho mask it comes from. The rule is
-        // ROMS set_masks.F's, msku = mskr(i-1,j)*mskr(i,j).
+        // Face masks are derived rather than stored: nothing else needs them, and a derived
+        // one cannot drift out of sync with the rho mask. ROMS set_masks.F's rule is
+        // msku = mskr(i-1,j)*mskr(i,j).
         const int idir = (index_type[0]==1) ? 0 : ((index_type[1]==1) ? 1 : -1);
         MultiFab fmsk, cmsk;
         if (idir >= 0) {
