@@ -24,10 +24,6 @@ remora.v              = 0       # verbosity in REMORA.cpp (0: none, 1: print box
 amr.v                = 1       # verbosity in Amr.cpp
 
 # REFINEMENT / REGRIDDING
-# Lockstep. amr.do_substep now defaults to 1, and this lane is the comparison path: its
-# baseline predates subcycling and is what a subcycled answer gets read against.
-amr.do_substep = 0
-
 amr.max_level       = 1       # maximum level number allowed
 amr.ref_ratio_vect = 2 2 1
 amr.regrid_int=1

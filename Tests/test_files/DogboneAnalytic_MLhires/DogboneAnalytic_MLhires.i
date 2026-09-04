@@ -27,10 +27,6 @@ remora.fixed_dt            = 2.0 # Timestep size (seconds)
 remora.ndtfast = 20
 
 # REFINEMENT / REGRIDDING
-# Lockstep. amr.do_substep now defaults to 1, and this lane is the comparison path: its
-# baseline predates subcycling and is what a subcycled answer gets read against.
-amr.do_substep = 0
-
 amr.max_level       = 1       # maximum level number allowed
 amr.ref_ratio_vect = 3 3  1
 
