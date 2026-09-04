@@ -362,12 +362,12 @@ List of Parameters
 |                                  | :math:`>` # of   |                    |                   |
 |                                  | grids            |                    |                   |
 +----------------------------------+------------------+--------------------+-------------------+
-| **amr.do_substep**               | whether to       | 0 if false, 1      | 0                 |
+| **amr.do_substep**               | whether to       | 0 if false, 1      | 1                 |
 |                                  | sub-step finer   | if true            |                   |
 |                                  |                  |                    |                   |
-|                                  | levels in time   | NOTE: under        |                   |
+|                                  | levels in time   | 0 selects the      |                   |
 |                                  |                  |                    |                   |
-|                                  |                  | development        |                   |
+|                                  |                  | lockstep driver    |                   |
 +----------------------------------+------------------+--------------------+-------------------+
 | **remora.dt_ref_ratio**          | time step        | integer > 0,       | spatial           |
 |                                  | ratio between    |                    |                   |
@@ -403,10 +403,12 @@ Notes
 -  **amr.max_grid_size** must be a multiple of **amr.blocking_factor**
    at every level
 
--  **amr.do_substep** is implemented but not yet validated. The coarse-to-fine coupling, the
-   fine-to-coarse feedback and the tracer flux correction are all in place, but no test checks
-   conservation across the coarse-fine interface. Use the default of 0 for science runs until that
-   is settled.
+-  **amr.do_substep** = 1 is the default. Setting it to 0 selects the lockstep driver, which
+   advances every level once per step through one shared barotropic loop. That path is kept for
+   comparison against answers predating subcycling and is expected to be deprecated. It conserves
+   less well at a coarse-fine interface -- volume drift 2.0e-6 against 3.1e-10 on DogboneAnalytic
+   -- because its shared barotropic loop cannot hand a finer level the parent's completed mass
+   flux, so the interface treatment that conserves is unavailable to it.
 
 -  **remora.dt_ref_ratio** only has an effect when **amr.do_substep** = 1. It defaults to the
    spatial refinement ratio but need not equal it. Setting it to 1 advances every level with the

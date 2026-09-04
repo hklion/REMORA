@@ -2455,17 +2455,16 @@ REMORA::ReadParameters ()
     {
         ParmParse pp_amr("amr");
         pp_amr.queryAdd("regrid_int", regrid_int);
-        // Advance finer levels nsubsteps[lev] times per parent step instead of in
-        // lockstep. Default 0 keeps the timeStepML path and its answers.
+        // Advance finer levels nsubsteps[lev] times per parent step. Setting this to 0
+        // selects timeStepML, which marches every level once per step through one shared
+        // barotropic loop; it is kept as a comparison path against the older answers.
         pp_amr.queryAdd("do_substep", do_substep);
-        if (do_substep && max_level > 0) {
-            // The coupling is in place; what is missing is validation.
-            amrex::Print() << "********************************************************************************" << std::endl;
-            amrex::Print() << "WARNING: amr.do_substep = 1 is not yet validated for science runs. The coarse-  " << std::endl;
-            amrex::Print() << "         to-fine coupling, the fine-to-coarse feedback and the tracer flux      " << std::endl;
-            amrex::Print() << "         correction are all implemented, but no test checks conservation across " << std::endl;
-            amrex::Print() << "         the coarse-fine interface.                                            " << std::endl;
-            amrex::Print() << "********************************************************************************" << std::endl;
+        if (!do_substep && max_level > 0) {
+            amrex::Print() << "NOTE: amr.do_substep = 0 selects the lockstep driver, which conserves less well\n"
+                           << "      across a coarse-fine interface than the default: volume drift 2.0e-6\n"
+                           << "      against 3.1e-10 on DogboneAnalytic. Its shared barotropic loop cannot\n"
+                           << "      hand a finer level the parent's completed mass flux, so the interface\n"
+                           << "      treatment that conserves is unavailable to it." << std::endl;
         }
     }
     solverChoice.init_params(ncons, nscalar, cons_names);

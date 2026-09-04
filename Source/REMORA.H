@@ -1770,7 +1770,7 @@ private:
     int nfast;
 
     /** \brief Whether to substep fine levels in time */
-    int do_substep = 0;
+    int do_substep = 1;
 
     /** \brief interpolate the parent's barotropic mass flux in time at the coarse-fine
      *         interface, rather than holding its step average. Off matches ROMS. */
