@@ -469,7 +469,9 @@ Land/Sea Masking
 
 A land/sea mask marks each point as water (1) or land (0). ``remora.mask_type`` selects the
 source: ``none`` leaves everything water, ``analytic`` calls the problem's mask function, and
-``netcdf`` reads ``mask_rho``, ``mask_u`` and ``mask_v`` from the grid file.
+``netcdf`` reads ``mask_rho`` from the grid file. Only the rho-point mask is ever read or
+given analytically; the u-, v- and psi-point masks are derived from it as ROMS ``set_masks.F``
+defines them, so the two cannot disagree.
 
 As with bathymetry, the mask is specified once and every other level derived from it, so levels
 cannot disagree about the coastline. With ``remora.hires_grid_level < 0`` it is given at level 0
