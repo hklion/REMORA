@@ -444,6 +444,11 @@ add_test_conservation(DogboneAnalytic_ML_conservation DogboneAnalytic_ML_subcycl
 # parent's and scales them by the refinement ratio.
 add_test_log(Advection_ML_cf_metrics "remora_exec" "CF edge tiling")
 
+# The same check where it is not trivially satisfied. Every other multi-level case has uniform
+# pm and pn, so the fine edges sum to the coarse edge for a reason that says nothing about the
+# general case. BoundaryLayer stretches dx by nearly a factor of four across the domain.
+add_test_log(BoundaryLayer_ML_cf_metrics "remora_exec" "CF edge tiling")
+
 # amr.do_substep is the original spelling and has to keep working. The warning is the
 # observable proof the fallback was read rather than silently ignored, and setting both
 # spellings is an error rather than a silent precedence rule.
