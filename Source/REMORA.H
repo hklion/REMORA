@@ -1861,6 +1861,9 @@ private:
     /** \brief Set refinement criteria */
     void refinement_criteria_setup();
 
+    /** \brief Reject vertical refinement and accumulate the refinement ratios */
+    void init_ref_ratios ();
+
     /** \brief Holds info for dynamically generated tagging criteria */
     static amrex::Vector<amrex::AMRErrorTag> ref_tags;
 

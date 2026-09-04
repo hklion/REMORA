@@ -142,28 +142,7 @@ REMORA::REMORA ()
     // Initialize tagging criteria for mesh refinement
     refinement_criteria_setup();
 
-    IntVect cum_ref_ratio = IntVect(1,1,0);
-    cum_ref_ratios.push_back(cum_ref_ratio);
-    // We have already read in the ref_Ratio (via amr.ref_ratio =) but we need to enforce
-    //     that there is no refinement in the vertical so we test on that here.
-    for (int lev = 0; lev < max_level; ++lev)
-    {
-       amrex::Print() << "Refinement ratio at level " << lev << " set to be " <<
-          ref_ratio[lev][0]  << " " << ref_ratio[lev][1]  <<  " " << ref_ratio[lev][2] << std::endl;
-
-       if (ref_ratio[lev][2] != 1)
-       {
-           amrex::Print() << "********************************************************************************" << std::endl;
-           amrex::Print() << "We don't allow refinement in the vertical -- make sure to set ref_ratio = 1 in z" << std::endl;
-           amrex::Print() << "It's possible you set amr.ref_ratio when you meant to set amr.ref_ratio_vect    " << std::endl;
-           amrex::Print() << "********************************************************************************" << std::endl;
-           amrex::Abort();
-       }
-
-       cum_ref_ratio[0] *= ref_ratio[lev][0];
-       cum_ref_ratio[1] *= ref_ratio[lev][1];
-       cum_ref_ratios.push_back(cum_ref_ratio);
-    }
+    init_ref_ratios();
 }
 
 REMORA::REMORA (const amrex::RealBox& rb, int max_level_in, const amrex::Vector<int>& n_cell_in, int coord, const amrex::Vector<amrex::IntVect>& ref_ratio_in, const amrex::Array<int,AMREX_SPACEDIM>& is_per, std::string prefix)
@@ -226,6 +205,29 @@ REMORA::REMORA (const amrex::RealBox& rb, int max_level_in, const amrex::Vector<
 
     refinement_criteria_setup();
 
+    init_ref_ratios();
+}
+
+REMORA::~REMORA ()
+{
+}
+
+/**
+ * Reject refinement in the vertical, and accumulate the refinement ratios.
+ *
+ * Shared by both constructors. It used to be written out in each of them, and the explicit one
+ * had been left without the cum_ref_ratios half -- so the vector stayed empty, and every
+ * full-domain hires array and every mask coarsening that indexes it read out of bounds.
+ */
+void
+REMORA::init_ref_ratios ()
+{
+    AMREX_ALWAYS_ASSERT(cum_ref_ratios.empty());
+
+    IntVect cum_ref_ratio = IntVect(1,1,0);
+    cum_ref_ratios.push_back(cum_ref_ratio);
+    // We have already read in the ref_ratio (via amr.ref_ratio =) but we need to enforce
+    //     that there is no refinement in the vertical so we test on that here.
     for (int lev = 0; lev < max_level; ++lev)
     {
        amrex::Print() << "Refinement ratio at level " << lev << " set to be " <<
@@ -239,12 +241,13 @@ REMORA::REMORA (const amrex::RealBox& rb, int max_level_in, const amrex::Vector<
            amrex::Print() << "********************************************************************************" << std::endl;
            amrex::Abort();
        }
+
+       cum_ref_ratio[0] *= ref_ratio[lev][0];
+       cum_ref_ratio[1] *= ref_ratio[lev][1];
+       cum_ref_ratios.push_back(cum_ref_ratio);
     }
 }
 
-REMORA::~REMORA ()
-{
-}
 
 void
 REMORA::init_scalar_metadata ()
