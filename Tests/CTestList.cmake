@@ -378,9 +378,9 @@ add_test_r(DogboneAnalytic_MLvel        "remora_exec" "plt_ml00010")
 add_test_r(DogboneAnalytic_MLquad       "remora_exec" "plt_ml_quad00010")
 
 #=============================================================================
-# Time subcycling on refined levels (amr.do_substep)
+# Time subcycling on refined levels (remora.do_substep)
 #
-# These answers carry no gold file: amr.do_substep is not yet validated for science runs, so
+# These answers carry no gold file: remora.do_substep is not yet validated for science runs, so
 # blessing its output would fix numbers nobody is prepared to defend. The lanes assert
 # behaviour instead -- here, that level 1 receives dt[0]/2 (fixed_dt = 100, ref_ratio = 2).
 #=============================================================================
@@ -393,8 +393,8 @@ add_test_log(Advection_ML_subcycle      "remora_exec" "with dt = 50")
 # not apply at all, so leaving it on would compare a feature rather than the drivers. It
 # moves the tracer by 3e-4 here, well clear of the tolerance.
 add_test_r_selfcompare(Advection_ML_subcycle_identity "remora_exec" "plt00020"
-                       "amr.do_substep=0"
-                       "amr.do_substep=1 remora.dt_ref_ratio=1 remora.do_reflux=0")
+                       "remora.do_substep=0"
+                       "remora.do_substep=1 remora.dt_ref_ratio=1 remora.do_reflux=0")
 
 # Advection has a flat bottom, so D matches across the interface and set_2d_cf_bcs reduces to
 # the interpolation it replaces. This lane has varying bathymetry and a refinement ratio of 3,
@@ -442,6 +442,12 @@ add_test_conservation(DogboneAnalytic_ML_conservation DogboneAnalytic_ML_subcycl
 # is not guaranteed on the NetCDF path, where a finer level interpolates its metrics from the
 # parent's and scales them by the refinement ratio.
 add_test_log(Advection_ML_cf_metrics "remora_exec" "CF edge tiling")
+
+# amr.do_substep is the original spelling and has to keep working. The warning is the
+# observable proof the fallback was read rather than silently ignored, and setting both
+# spellings is an error rather than a silent precedence rule.
+add_test_log(Advection_ML_do_substep_alias "remora_exec" "amr.do_substep is deprecated")
+add_test_abort(Advection_ML_do_substep_both_abort "remora_exec" "and amr.do_substep are both")
 
 #=============================================================================
 # High-resolution initialization (remora.hires_grid_level / remora.hires_init_level)

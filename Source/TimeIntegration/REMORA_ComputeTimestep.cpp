@@ -26,7 +26,7 @@ REMORA::print_timestep_hierarchy () const
     if (max_level == 0) { return; }
 
     amrex::Print() << "\n Timestep hierarchy"
-                   << "  (amr.do_substep = " << do_substep
+                   << "  (remora.do_substep = " << do_substep
                    << ", remora.ndtfast = " << ndtfast
                    << ", nfast = " << nfast << ")\n"
                    << " ==================\n\n"

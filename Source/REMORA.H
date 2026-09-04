@@ -1777,7 +1777,7 @@ private:
     bool time_interp_flux = false;
 
     /** \brief correct the coarse tracer with the finer level's accumulated advective flux
-     *         at their interface. Only has an effect under amr.do_substep with two-way
+     *         at their interface. Only has an effect under remora.do_substep with two-way
      *         coupling. */
     int do_reflux = 1;
 

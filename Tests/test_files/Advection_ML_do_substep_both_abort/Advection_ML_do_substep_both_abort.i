@@ -1,13 +1,11 @@
 # ------------------  INPUTS TO MAIN PROGRAM  -------------------
 #
-# Advection_ML with time subcycling: level 1 takes 2 steps of dt[0]/2 per level-0 step via
-# the recursive REMORA::timeStep. remora.do_substep is not validated for science runs, so its
-# answers carry no gold file -- this lane asserts only that the driver runs and that level 1
-# gets dt[0]/2. See Advection_ML for the lockstep lane and its baseline.
+# Setting remora.do_substep and its deprecated amr.do_substep alias together is an error
+# rather than a silent precedence rule, since the two would otherwise disagree invisibly.
 #
 remora.prob_name = Advection
 
-remora.max_step = 10
+remora.max_step = 4
 remora.stop_time = 300000.0
 
 amrex.fpe_trap_invalid = 1
@@ -26,6 +24,7 @@ remora.ndtfast  = 10
 
 # TIME SUBCYCLING
 remora.do_substep = 1
+amr.do_substep = 0
 
 # DIAGNOSTICS & VERBOSITY
 remora.sum_interval   = 10       # timesteps between computing mass

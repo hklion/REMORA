@@ -2249,10 +2249,39 @@ REMORA::ReadParameters ()
     // Number of barotropic (fast) steps taken per baroclinic (slow) step.
     pp.queryAdd("ndtfast", ndtfast);
 
-    // See set_2d_cf_bcs. Only has an effect when amr.do_substep = 1.
+    // Advance finer levels nsubsteps[lev] times per parent step. Setting this to 0 selects
+    // timeStepML, which marches every level once per step through one shared barotropic loop;
+    // it is kept as a comparison path against the answers that predate subcycling.
+    //
+    // amr.do_substep is the original spelling and still works, but amrex owns that namespace,
+    // so remora.do_substep is preferred. Read the alias first so the queryAdd below records
+    // the resulting value under the preferred name.
+    {
+        ParmParse pp_amr("amr");
+        if (pp_amr.contains("do_substep")) {
+            if (pp.contains("do_substep")) {
+                amrex::Abort("remora.do_substep and amr.do_substep are both specified. "
+                             "Please use only remora.do_substep");
+            }
+            amrex::Print() << "WARNING: amr.do_substep is deprecated. "
+                           << "Please use remora.do_substep instead." << std::endl;
+            pp_amr.queryAdd("do_substep", do_substep);
+        }
+    }
+    pp.queryAdd("do_substep", do_substep);
+
+    if (!do_substep && max_level > 0) {
+        amrex::Print() << "NOTE: remora.do_substep = 0 selects the lockstep driver, which conserves less\n"
+                       << "      well across a coarse-fine interface than the default: volume drift\n"
+                       << "      2.0e-6 against 3.1e-10 on DogboneAnalytic. Its shared barotropic loop\n"
+                       << "      cannot hand a finer level the parent's completed mass flux, so the\n"
+                       << "      interface treatment that conserves is unavailable to it." << std::endl;
+    }
+
+    // See set_2d_cf_bcs. Only has an effect when remora.do_substep = 1.
     pp.queryAdd("time_interp_flux", time_interp_flux);
 
-    // Tracer flux correction at the coarse-fine interface. Needs amr.do_substep and
+    // Tracer flux correction at the coarse-fine interface. Needs remora.do_substep and
     // two-way coupling to do anything.
     pp.queryAdd("do_reflux", do_reflux);
 
@@ -2455,17 +2484,6 @@ REMORA::ReadParameters ()
     {
         ParmParse pp_amr("amr");
         pp_amr.queryAdd("regrid_int", regrid_int);
-        // Advance finer levels nsubsteps[lev] times per parent step. Setting this to 0
-        // selects timeStepML, which marches every level once per step through one shared
-        // barotropic loop; it is kept as a comparison path against the older answers.
-        pp_amr.queryAdd("do_substep", do_substep);
-        if (!do_substep && max_level > 0) {
-            amrex::Print() << "NOTE: amr.do_substep = 0 selects the lockstep driver, which conserves less well\n"
-                           << "      across a coarse-fine interface than the default: volume drift 2.0e-6\n"
-                           << "      against 3.1e-10 on DogboneAnalytic. Its shared barotropic loop cannot\n"
-                           << "      hand a finer level the parent's completed mass flux, so the interface\n"
-                           << "      treatment that conserves is unavailable to it." << std::endl;
-        }
     }
     solverChoice.init_params(ncons, nscalar, cons_names);
 

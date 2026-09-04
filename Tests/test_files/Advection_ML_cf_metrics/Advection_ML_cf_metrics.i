@@ -31,7 +31,7 @@ remora.ndtfast  = 10
 remora.check_cf_metrics = 1
 
 # TIME SUBCYCLING
-amr.do_substep = 1
+remora.do_substep = 1
 
 # DIAGNOSTICS & VERBOSITY
 remora.sum_interval   = 10       # timesteps between computing mass

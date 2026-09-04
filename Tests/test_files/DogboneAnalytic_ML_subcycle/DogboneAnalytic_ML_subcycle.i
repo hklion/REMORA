@@ -32,7 +32,7 @@ remora.ndtfast = 20
 # has varying bathymetry, so D differs across the interface and set_2d_cf_bcs bites: the
 # mass-flux form corrects ubar by ~0.02 m/s against interpolating the parent's ubar. On a flat
 # bottom the two coincide and the lane proves nothing.
-amr.do_substep = 1
+remora.do_substep = 1
 
 amr.max_level       = 1       # maximum level number allowed
 amr.ref_ratio_vect = 3 3  1

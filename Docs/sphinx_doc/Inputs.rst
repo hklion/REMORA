@@ -362,7 +362,7 @@ List of Parameters
 |                                  | :math:`>` # of   |                    |                   |
 |                                  | grids            |                    |                   |
 +----------------------------------+------------------+--------------------+-------------------+
-| **amr.do_substep**               | whether to       | 0 if false, 1      | 1                 |
+| **remora.do_substep**            | whether to       | 0 if false, 1      | 1                 |
 |                                  | sub-step finer   | if true            |                   |
 |                                  |                  |                    |                   |
 |                                  | levels in time   | 0 selects the      |                   |
@@ -403,19 +403,21 @@ Notes
 -  **amr.max_grid_size** must be a multiple of **amr.blocking_factor**
    at every level
 
--  **amr.do_substep** = 1 is the default. Setting it to 0 selects the lockstep driver, which
+-  **remora.do_substep** = 1 is the default. **amr.do_substep** is the original spelling and
+   still works, but amrex owns that namespace; setting both is an error. Setting it to 0 selects
+   the lockstep driver, which
    advances every level once per step through one shared barotropic loop. That path is kept for
    comparison against answers predating subcycling and is expected to be deprecated. It conserves
    less well at a coarse-fine interface -- volume drift 2.0e-6 against 3.1e-10 on DogboneAnalytic
    -- because its shared barotropic loop cannot hand a finer level the parent's completed mass
    flux, so the interface treatment that conserves is unavailable to it.
 
--  **remora.dt_ref_ratio** only has an effect when **amr.do_substep** = 1. It defaults to the
+-  **remora.dt_ref_ratio** only has an effect when **remora.do_substep** = 1. It defaults to the
    spatial refinement ratio but need not equal it. Setting it to 1 advances every level with the
    level-0 time step, which is how the sub-stepped driver is compared against the lockstep one.
 
 -  **remora.do_reflux** (default 1) corrects the coarse tracer with the finer level's
-   accumulated advective flux at their interface. It needs **amr.do_substep** = 1 and
+   accumulated advective flux at their interface. It needs **remora.do_substep** = 1 and
    **remora.coupling_type** = TwoWay to have any effect.
 
 -  **remora.reflux_clamp** (default 1) stops that correction driving a tracer negative, matching
