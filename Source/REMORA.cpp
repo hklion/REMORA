@@ -2259,6 +2259,11 @@ REMORA::ReadParameters ()
     // Whether that correction may drive a tracer negative. See clamp_reflux.
     pp.queryAdd("reflux_clamp", reflux_clamp);
 
+    // See check_cf_metrics. Off by default: it is a property of the grid, so one run says as
+    // much as every run.
+    pp.queryAdd("check_cf_metrics", check_cf_metrics_flag);
+    pp.queryAdd("check_cf_tol", check_cf_tol);
+
     // Advance and timeStepML form the fast step as dt / ndtfast, and set_weights sizes
     // the barotropic filter with the same number, so a non-positive value divides by zero
     // at all three sites. Nothing can infer it: dt is not known until run time on a
@@ -2570,6 +2575,100 @@ REMORA::clamp_reflux (int lev, const MultiFab& pre_reflux)
 }
 
 /**
+ * Measure whether the fine cell edges tile the coarse ones across a coarse-fine interface.
+ *
+ * set_2d_cf_bcs hands a finer level the parent's mass flux per unit edge length and lets each
+ * fine face multiply its own edge length back in. The fine fluxes therefore sum to the coarse
+ * flux they replace only if the fine edges sum to the coarse edge:
+ *
+ *     sum over the r fine faces of on_u_f  ==  on_u_c
+ *
+ * That is exact when pm and pn are uniform, and not guaranteed otherwise -- on the NetCDF path
+ * a finer level takes its metrics from an interpolation of the parent's, scaled by the
+ * refinement ratio, which need not preserve the sum. Everything Phase 3 does rests on this, so
+ * measure it rather than assume it.
+ *
+ * @param[in   ] crse_lev  coarse side of the interface
+ */
+void
+REMORA::check_cf_metrics (int crse_lev)
+{
+    const int rrx = ref_ratio[crse_lev][0];
+    const int rry = ref_ratio[crse_lev][1];
+
+    auto edge_residual = [&] (int dir, int ratio) -> Real
+    {
+        const IntVect ixt = (dir == 0) ? IntVect(1,0,0) : IntVect(0,1,0);
+        const MultiFab& metric_f = (dir == 0) ? *vec_pn[crse_lev+1] : *vec_pm[crse_lev+1];
+        const MultiFab& metric_c = (dir == 0) ? *vec_pn[crse_lev  ] : *vec_pm[crse_lev  ];
+
+        auto edge_lengths = [&] (const MultiFab& metric, int lev, MultiFab& out)
+        {
+            // pm and pn already live on the z-flattened BoxArray.
+            BoxArray ba = convert(metric.boxArray(), ixt);
+            out.define(ba, metric.DistributionMap(), 1, 0);
+            for (MFIter mfi(out, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+                Array4<Real      > const& e = out.array(mfi);
+                Array4<Real const> const& m = metric.const_array(mfi);
+                const int d = dir;
+                ParallelFor(mfi.tilebox(), [=] AMREX_GPU_DEVICE (int i, int j, int)
+                {
+                    const int im = (d == 0) ? i-1 : i;
+                    const int jm = (d == 0) ? j   : j-1;
+                    e(i,j,0) = two / (m(i,j,0) + m(im,jm,0));
+                });
+            }
+            amrex::ignore_unused(lev);
+        };
+
+        MultiFab edge_f, edge_c;
+        edge_lengths(metric_f, crse_lev+1, edge_f);
+        edge_lengths(metric_c, crse_lev  , edge_c);
+
+        // average_down_faces leaves faces the finer level does not cover untouched. Seeding
+        // with the coarse value over the ratio makes those contribute exactly zero below,
+        // rather than whatever the allocation happened to hold.
+        MultiFab avg(edge_c.boxArray(), edge_c.DistributionMap(), 1, 0);
+        MultiFab::Copy(avg, edge_c, 0, 0, 1, 0);
+        avg.mult(one / Real(ratio), 0, 1, 0);
+
+        average_down_faces(edge_f, avg, refRatio(crse_lev), 0);
+
+        // avg is the mean over the covering fine faces, so ratio*avg is their sum.
+        Real worst = zero;
+        for (MFIter mfi(avg, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+            Array4<Real const> const& a = avg.const_array(mfi);
+            Array4<Real const> const& c = edge_c.const_array(mfi);
+            ReduceOps<ReduceOpMax> reduce_op;
+            ReduceData<Real> reduce_data(reduce_op);
+            reduce_op.eval(mfi.tilebox(), reduce_data,
+            [=] AMREX_GPU_DEVICE (int i, int j, int k) -> GpuTuple<Real>
+            {
+                if (c(i,j,k) == zero) { return {zero}; }
+                return {amrex::Math::abs(Real(ratio) * a(i,j,k) - c(i,j,k)) /
+                        amrex::Math::abs(c(i,j,k))};
+            });
+            worst = amrex::max(worst, amrex::get<0>(reduce_data.value(reduce_op)));
+        }
+        ParallelDescriptor::ReduceRealMax(worst);
+        return worst;
+    };
+
+    const Real res_u = edge_residual(0, rry);
+    const Real res_v = edge_residual(1, rrx);
+
+    amrex::Print() << "CF edge tiling, levels " << crse_lev << "/" << crse_lev+1
+                   << ": max relative residual on_u " << res_u
+                   << ", om_v " << res_v << std::endl;
+
+    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+        amrex::max(res_u, res_v) < check_cf_tol,
+        "REMORA::check_cf_metrics: fine cell edges do not sum to the coarse edge across the "
+        "coarse-fine interface, so the mass flux set_2d_cf_bcs imposes there cannot be "
+        "conservative. Raise remora.check_cf_tol only if you know why the grid does this.");
+}
+
+/**
  * Build the flux register holding the tracer flux mismatch between lev and lev-1.
  *
  * Called whenever a level is created or its grids change, not once at startup: a level that
@@ -2700,6 +2799,8 @@ REMORA::AverageDownTo (int crse_lev)
                         *vec_mskv[flev], cmskv, 1, 1);
     average_down_masked(crse_lev, *zvel_new[flev], *zvel_new[crse_lev],
                         *vec_mskr[flev], cmskr, 1, 2);
+
+    if (check_cf_metrics_flag) { check_cf_metrics(crse_lev); }
 
     // Hand the child's 2D momentum back to the parent, as ROMS's fine2coarse does. The
     // parent's next advance_2d reads ubar(krhs), krhs = istep % 2, to form DUon, so this

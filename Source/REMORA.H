@@ -1660,6 +1660,9 @@ private:
     /** \brief stop the flux correction driving a tracer negative */
     void clamp_reflux (int lev, const amrex::MultiFab& pre_reflux);
 
+    /** \brief check that fine cell edges sum to the coarse edge across an interface */
+    void check_cf_metrics (int crse_lev);
+
     ////////////////
     // boundary data members
 
@@ -1781,6 +1784,12 @@ private:
     /** \brief stop that correction driving a tracer negative, as ROMS does. On by default to
      *         match ROMS; costs exact conservation on any step that clamps. */
     int reflux_clamp = 1;
+
+    /** \brief measure whether fine cell edges tile the coarse ones at a coarse-fine
+     *         interface, which is what makes the imposed mass flux conservative */
+    int check_cf_metrics_flag = 0;
+    /** \brief tolerance for the above */
+    amrex::Real check_cf_tol = 1.e-12;
 
     /** \brief how often each level regrids the higher levels of refinement (after a level advances that many time steps) */
     int regrid_int = 2;

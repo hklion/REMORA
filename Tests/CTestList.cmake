@@ -435,6 +435,14 @@ add_test_conservation(DogboneAnalytic_ML_conservation DogboneAnalytic_ML_subcycl
                       "remora.max_step=20"
                       volume 1e-8 below)
 
+# The assumption underneath all of the above: the fine cell edges have to sum to the coarse
+# edge, or the mass flux imposed at the interface cannot be conservative whatever else is
+# right. check_cf_metrics aborts past remora.check_cf_tol, so reaching the printed line is the
+# assertion. Measured at 0 on this ratio-2 analytic grid and 1.4e-16 on Dogbone's ratio 3; it
+# is not guaranteed on the NetCDF path, where a finer level interpolates its metrics from the
+# parent's and scales them by the refinement ratio.
+add_test_log(Advection_ML_cf_metrics "remora_exec" "CF edge tiling")
+
 #=============================================================================
 # High-resolution initialization (remora.hires_grid_level / remora.hires_init_level)
 #
