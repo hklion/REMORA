@@ -6,12 +6,19 @@ Writes two files in **64-bit offset classic** (CDF-2) format, matching the ``*_c
 convention used throughout REMORA's inputs. PnetCDF cannot read NETCDF4/HDF5, so the format is
 not negotiable -- the writer below pins it explicitly and refuses to guess.
 
-    <dir>/hires_grd.nc   h, pm, pn                    (SN_WE)
+    <dir>/hires_grd.nc   h, pm, pn, mask_rho          (SN_WE)
     <dir>/hires_ini.nc   temp, salt, u, v, zeta       (Time_BT_SN_WE / Time_SN_WE)
 
-Only the variables the hires readers actually consume are written. With both hires levels set,
-plus ``remora.use_coriolis = false`` and ``remora.mask_type = none``, the level-0 files are never
-dereferenced, so no ``x_rho``, ``f`` or ``mask_*`` are needed anywhere.
+Only the variables the hires readers actually consume are written. With both hires levels set
+and ``remora.use_coriolis = false``, the level-0 files are never dereferenced, so no ``x_rho``
+or ``f`` is needed anywhere. ``mask_rho`` is written so that ``remora.mask_type = netcdf`` also
+works off the hires file alone; ``mask_u``/``mask_v`` are not, since the hires reader derives
+them from ``mask_rho`` the way ROMS defines them.
+
+The coastline is placed one *fine* row above a coarse cell face, which is the whole point: it
+leaves the coarse row straddling it partly wet, so the mask-weighted coarsening of the
+bathymetry and of the initial state has something to do. A coastline on a coarse face would
+make every block wholly wet or wholly dry and the weighting would be untestable.
 
 The grow-cell rule (Docs/sphinx_doc/Inputs.rst) fixes the dimensions::
 
@@ -131,10 +138,20 @@ def main():
     pm = (1.0 / dx_f) * (1.0 + 0.06 * np.sin(2.0 * np.pi * X / lx))
     pn = (1.0 / dx_f) * (1.0 - 0.06 * np.cos(2.0 * np.pi * Y / ly))
 
+    # Land along the southern edge, with the coastline one fine row above the coarse cell face
+    # at y = 2*dx, so coarse row 2 comes out (r-1)/r water and the mask weighting is exercised.
+    # Deliberately the simplest geometry that does that: a wavier coast risks a coarse face that
+    # is open with no open fine face beneath it, which check_mask_consistency rejects.
+    ycut = 2.0 * args.dx + dx_f
+    mask_rho = np.where(Y < ycut, 0.0, 1.0)
+
     grd = os.path.join(args.dir, "hires_grd.nc")
     fh, kind = open_cdf2(grd, {"eta_rho": eta_rho, "xi_rho": xi_rho})
     put(fh, kind, "h", ("eta_rho", "xi_rho"), h, units="meter",
         long_name="bathymetry at RHO-points")
+    put(fh, kind, "mask_rho", ("eta_rho", "xi_rho"), mask_rho,
+        long_name="mask on RHO-points", flag_values="0., 1.",
+        flag_meanings="land water")
     put(fh, kind, "pm", ("eta_rho", "xi_rho"), pm, units="meter-1",
         long_name="curvilinear coordinate metric in XI")
     put(fh, kind, "pn", ("eta_rho", "xi_rho"), pn, units="meter-1",
