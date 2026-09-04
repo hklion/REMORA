@@ -2805,8 +2805,7 @@ REMORA::AverageDownTo (int crse_lev)
     // Hand the child's 2D momentum back to the parent, as ROMS's fine2coarse does. The
     // parent's next advance_2d reads ubar(krhs), krhs = istep % 2, to form DUon, so this
     // feeds its next barotropic step: dropping it moves the Dogbone x-velocity by 9%.
-    // Gated because the lockstep answers were blessed without it.
-    if (do_substep) {
+    {
         // Only components 0 and 1. ubar's three components are leapfrog slots that rotate
         // per level, so the parent's component n need not hold the same time level as the
         // child's. These two are exempt: update_massflux_3d has just set both to the same

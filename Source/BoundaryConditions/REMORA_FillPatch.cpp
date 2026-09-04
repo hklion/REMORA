@@ -125,11 +125,11 @@ REMORA::FillPatch (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab*> c
     {
         Vector<MultiFab*> fmf = {mfs[lev], mfs[lev]};
         Vector<Real> ftime    = {t_old[lev], t_new[lev]};
-        // A subcycled fine level asks for times inside the parent's step, so the coarse
-        // contribution has to be interpolated. Passing one MultiFab twice makes
-        // FillPatchTwoLevels return it whatever the time: fine in lockstep, wrong here.
+        // The fine level asks for a time inside the parent's step, so the coarse contribution
+        // has to be interpolated between the parent's old and new states. Passing one
+        // MultiFab twice makes FillPatchTwoLevels return it whatever time is asked for.
         Vector<MultiFab*> cmf = {mfs[lev-1], mfs[lev-1]};
-        if (do_substep && int(mfs_crse_old.size()) >= lev && int(mfs_crse_new.size()) >= lev) {
+        if (int(mfs_crse_old.size()) >= lev && int(mfs_crse_new.size()) >= lev) {
             cmf = {mfs_crse_old[lev-1], mfs_crse_new[lev-1]};
             mfs_crse_old[lev-1]->FillBoundary(geom[lev-1].periodicity());
         }
@@ -295,11 +295,11 @@ REMORA::FillPatchNoBC (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab
     {
         Vector<MultiFab*> fmf = {mfs[lev], mfs[lev]};
         Vector<Real> ftime    = {t_old[lev], t_new[lev]};
-        // A subcycled fine level asks for times inside the parent's step, so the coarse
-        // contribution has to be interpolated. Passing one MultiFab twice makes
-        // FillPatchTwoLevels return it whatever the time: fine in lockstep, wrong here.
+        // The fine level asks for a time inside the parent's step, so the coarse contribution
+        // has to be interpolated between the parent's old and new states. Passing one
+        // MultiFab twice makes FillPatchTwoLevels return it whatever time is asked for.
         Vector<MultiFab*> cmf = {mfs[lev-1], mfs[lev-1]};
-        if (do_substep && int(mfs_crse_old.size()) >= lev && int(mfs_crse_new.size()) >= lev) {
+        if (int(mfs_crse_old.size()) >= lev && int(mfs_crse_new.size()) >= lev) {
             cmf = {mfs_crse_old[lev-1], mfs_crse_new[lev-1]};
             mfs_crse_old[lev-1]->FillBoundary(geom[lev-1].periodicity());
         }

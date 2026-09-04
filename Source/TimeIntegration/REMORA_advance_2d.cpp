@@ -792,6 +792,12 @@ REMORA::advance_2d (int lev,
 
         // Replace the interface faces the FillPatchers just set from the parent's ubar with
         // the parent's mass flux, which conserves mass. Must follow the FillPatch.
+        //
+        // Subcycling only, and not for want of trying: this needs the parent's completed
+        // fast-time-averaged flux, and timeStepML marches every level through one shared
+        // barotropic loop, so at this point the parent's DU_avg2 is still accumulating. The
+        // recursive driver finishes the parent's step before the child starts, which is what
+        // makes the average available. Lockstep would have to use a step-lagged one.
         if (do_substep) {
             set_2d_cf_bcs(lev, t_old[lev], know, knew);
         }
