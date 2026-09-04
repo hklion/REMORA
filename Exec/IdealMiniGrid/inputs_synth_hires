@@ -8,9 +8,9 @@
 #
 #   python3 ../../Tests/tools/make_hires_test_data.py --dir . --n-cell 10 10 4 --ref-ratio 3
 #
-# With both hires levels set, and with coriolis and masks off, the level-0 NetCDF files are never
-# dereferenced: bathymetry, metrics, state and zeta all arrive by averaging down from level 1. So
-# this lane needs only the two hires files.
+# With both hires levels set and coriolis off, the level-0 NetCDF files are never dereferenced:
+# bathymetry, metrics, mask, state and zeta all arrive by coarsening down from level 1. So this
+# lane needs only the two hires files.
 
 remora.prob_name = IdealMiniGrid
 
@@ -49,15 +49,29 @@ remora.nc_init_file_hires = "hires_ini.nc"
 remora.hires_grid_level   = 1
 remora.hires_init_level   = 1
 
-# Masks default to netcdf when ic_type is netcdf, and coriolis would want `f` from a level-0
-# grid file. Turning both off is what lets this lane run on the two hires files alone.
+# Coriolis would want `f` from a level-0 grid file, which this lane does not have, so it stays
+# off. The mask no longer needs one: hires_grd.nc carries mask_rho, and a level at or below
+# hires_grid_level takes the mask coarsened down from it. Left off here so this lane covers the
+# unmasked path; override with remora.mask_type = netcdf to exercise the mask weighting, and see
+# the VOLUME note below for what that should give.
 remora.mask_type    = "none"
 remora.use_coriolis = false
 
+# Inert while mask_type = none, and worth having on whenever it is not: validates that the mask
+# on each level agrees with the one above it, which is what the mask-weighted coarsening assumes.
+remora.check_mask_consistency = true
+
 # DIAGNOSTICS & VERBOSITY
 # sum_precision = 15 so VOLUME can be compared against a reference rather than just eyeballed:
-# at t = 0, sum_k Hz == zeta + h exactly, so VOLUME is a direct readout of the averaged-down
-# bathymetry and metrics. Compare it against sum h/(pm*pn) over the hires file's interior.
+# at t = 0, sum_k Hz == zeta + h exactly, so VOLUME is a direct readout of the coarsened
+# bathymetry and metrics. volWgtSumMF does not mask, so it reads out the mask weighting too:
+#
+#   mask_type = none      VOLUME(t=0) = 9522606688.290653
+#   mask_type = netcdf    VOLUME(t=0) = 9506731758.713726
+#
+# Both follow from the two NetCDF files alone: block mean of pm and pn divided by the refinement
+# ratio, and for h and zeta either the plain block mean or the mean over the block's wet cells.
+# At n_cell = 10 10 4 and ratio 3 the coastline leaves 10 coarse cells partly wet and 20 dry.
 remora.v             = 1
 remora.sum_interval  = 1
 remora.sum_precision = 15
@@ -66,7 +80,7 @@ remora.sum_precision = 15
 remora.plot_file     = plt
 remora.plot_int      = 10
 remora.plot_vars_3d  = salt temp x_velocity y_velocity z_velocity
-remora.plot_vars_2d  = h
+remora.plot_vars_2d  = h mask_rho
 remora.plotfile_type = amrex
 
 # SOLVER CHOICE
