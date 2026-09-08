@@ -63,6 +63,15 @@ REMORA::store_2d_flux (int lev)
             Dvbar(i,j,0) = DV_avg2(i,j,0) / om_v;
         });
     }
+
+    // There is no previous step on the first one, so extrapolate rather than leave old at
+    // the zero it was initialised with. Only remora.time_interp_flux reads old at all.
+    if (istep[lev] == 0) {
+        MultiFab::Copy(*vec_Dubar_old[lev], *vec_Dubar_new[lev], 0, 0, 1,
+                       vec_Dubar_new[lev]->nGrowVect());
+        MultiFab::Copy(*vec_Dvbar_old[lev], *vec_Dvbar_new[lev], 0, 0, 1,
+                       vec_Dvbar_new[lev]->nGrowVect());
+    }
 }
 
 /**
