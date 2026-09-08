@@ -423,6 +423,18 @@ add_test_conservation(Advection_ML_conservation_control Advection_ML_subcycle "r
                       "remora.max_step=20 remora.do_reflux=0"
                       tracer 1e-6 above)
 
+# Three levels, where the correction at the 1/2 interface has to be accumulated over several
+# steps of level 1 before it is applied. A two-level case refluxes once per step of the only
+# coarse level there is, so it passes whether or not that accumulation is right.
+add_test_conservation(Advection_3L_conservation Advection_3L_conservation "remora_exec"
+                      "remora.max_step=20 remora.do_reflux=1 remora.reflux_clamp=0"
+                      tracer 1e-10 below)
+
+# Its control, for the same reason as above.
+add_test_conservation(Advection_3L_conservation_control Advection_3L_conservation "remora_exec"
+                      "remora.max_step=20 remora.do_reflux=0"
+                      tracer 1e-6 above)
+
 # The floor. Both totals are exact on one level, so the AMR bounds are measured against
 # roundoff rather than against an unknown scheme error.
 add_test_conservation(Advection_conservation_baseline Advection_ML_subcycle "remora_exec"

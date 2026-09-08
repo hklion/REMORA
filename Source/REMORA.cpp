@@ -378,6 +378,11 @@ REMORA::WriteAtIntermediateTime(int step, amrex::Real cur_time)
 /**
  * Apply the tracer flux correction accumulated at the lev/lev+1 interface onto lev.
  *
+ * Once per step of lev, pairing the reset at the top of Advance(lev), so the accumulate and
+ * apply window sits inside one step of lev. Applying it per step of level 0 instead would
+ * keep only the last correction whenever lev was itself substepped, and would let the regrid
+ * of lev+1 rebuild the register mid-accumulation.
+ *
  * @param[in] lev            coarse level of the interface
  */
 void
@@ -443,10 +448,6 @@ REMORA::post_timestep (int nstep, Real time, Real dt_lev0)
     {
         for (int lev = finest_level-1; lev >= 0; lev--)
         {
-            // Before the average-down: refluxing writes coarse cells under the fine grid on
-            // the assumption they are about to be overwritten from it.
-            reflux_to(lev);
-
             AverageDownTo(lev);
         }
     }
