@@ -558,6 +558,14 @@ public:
     /** \brief land/sea mask at cell centers, copied to all z levels (3D) */
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_mskr3d;
 
+    /** \brief the level's rho-, u- and v-masks copied onto the layout of the level above it
+     * coarsened, which is the layout the two-way average-down computes on. Indexed by the
+     * coarse level of the pair. Built on demand and reused until a regrid, since the masks
+     * are a function of position alone and so do not change between them. **/
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_mskr_crse_on_fine;
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_msku_crse_on_fine;
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_mskv_crse_on_fine;
+
     /** \brief horizontal scaling factor: 1 / dx (2D) */
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_pm;
     /** \brief horizontal scaling factor: 1 / dy (2D) */
@@ -1127,6 +1135,12 @@ public:
     /** \brief Rebuild the u-, v- and psi-point masks from vec_mskr and fill their ghosts */
     void update_nodal_masks (int lev);
 
+    /** \brief Make sure the coarse masks the average-down kernels read sit on the coarsened
+     * layout of level crse_lev+1, rebuilding them if a regrid has moved it */
+    void update_avgdown_masks (int crse_lev);
+
+    /** \brief Drop the cached average-down masks of every level pair that involves lev */
+    void clear_avgdown_masks (int lev);
 
     /** \brief Check every level pair's masks against each other, and every level's mask
      * values, reporting according to remora.mask_consistency */

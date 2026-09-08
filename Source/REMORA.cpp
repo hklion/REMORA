@@ -248,7 +248,6 @@ REMORA::init_ref_ratios ()
     }
 }
 
-
 void
 REMORA::init_scalar_metadata ()
 {
@@ -872,6 +871,10 @@ REMORA::set_analytic_vmix(int lev) {
 void
 REMORA::set_masks (int lev)
 {
+    // Ahead of the mask_type == none return as well: that lane still fills the masks, and
+    // AverageDownTo still reads them, so its cached copies go stale here too.
+    clear_avgdown_masks(lev);
+
     if (solverChoice.mask_type == MaskType::none) {
         fill_3d_masks(lev);
         return;
@@ -2381,6 +2384,67 @@ REMORA::AverageDown ()
 }
 
 /**
+ * Drop the cached average-down masks of every level pair that involves lev, so the next
+ * AverageDownTo rebuilds them.
+ *
+ * Called from set_masks, which is the one place a level's mask is written, so a regrid cannot
+ * leave a cached copy of a mask that no longer exists behind.
+ *
+ * @param[in   ] lev   level whose mask has just been rebuilt
+ */
+void
+REMORA::clear_avgdown_masks (int lev)
+{
+    // lev as the coarse half of a pair, and lev as the fine half, whose layout is what the
+    // cached arrays are built on.
+    for (int crse_lev : {lev-1, lev}) {
+        if (crse_lev >= 0 && crse_lev < static_cast<int>(vec_mskr_crse_on_fine.size())) {
+            vec_mskr_crse_on_fine[crse_lev].reset();
+            vec_msku_crse_on_fine[crse_lev].reset();
+            vec_mskv_crse_on_fine[crse_lev].reset();
+        }
+    }
+}
+
+/**
+ * Make sure the coarse rho-, u- and v-masks are defined on the layout average_down_masked
+ * computes on: level crse_lev+1's grids coarsened, rather than level crse_lev's own grids.
+ *
+ * The masks are a function of position alone, so between regrids this is the same answer every
+ * step; building it once turns three allocations and three ParallelCopy calls per step into
+ * three per regrid. clear_avgdown_masks drops the cache when a mask is rewritten, and the
+ * layout comparison below catches anything that reaches here without going through it.
+ *
+ * @param[in   ] crse_lev   coarse level of the pair
+ */
+void
+REMORA::update_avgdown_masks (int crse_lev)
+{
+    BL_PROFILE("REMORA::update_avgdown_masks()");
+    const int flev = crse_lev + 1;
+    const IntVect ratio = refRatio(crse_lev);
+
+    const BoxArray cba = amrex::coarsen(vec_mskr[flev]->boxArray(), ratio);
+    const DistributionMapping& dmf = vec_mskr[flev]->DistributionMap();
+
+    if (vec_mskr_crse_on_fine[crse_lev] &&
+        vec_mskr_crse_on_fine[crse_lev]->boxArray() == cba &&
+        vec_mskr_crse_on_fine[crse_lev]->DistributionMap() == dmf) {
+        return;
+    }
+
+    vec_mskr_crse_on_fine[crse_lev].reset(new MultiFab(cba, dmf, 1, 0));
+    vec_msku_crse_on_fine[crse_lev].reset(
+            new MultiFab(amrex::convert(cba, IntVect(1,0,0)), dmf, 1, 0));
+    vec_mskv_crse_on_fine[crse_lev].reset(
+            new MultiFab(amrex::convert(cba, IntVect(0,1,0)), dmf, 1, 0));
+
+    vec_mskr_crse_on_fine[crse_lev]->ParallelCopy(*vec_mskr[crse_lev], 0, 0, 1);
+    vec_msku_crse_on_fine[crse_lev]->ParallelCopy(*vec_msku[crse_lev], 0, 0, 1);
+    vec_mskv_crse_on_fine[crse_lev]->ParallelCopy(*vec_mskv[crse_lev], 0, 0, 1);
+}
+
+/**
  * @param[in   ] crse_lev  level to average down to
  */
 void
@@ -2388,20 +2452,14 @@ REMORA::AverageDownTo (int crse_lev)
 {
     BL_PROFILE("REMORA::AverageDownTo()");
     const int flev = crse_lev + 1;
-    const IntVect ratio = refRatio(crse_lev);
 
-    // The kernels walk the coarsened-fine layout, so pull the coarse masks onto it first.
-    // Convert the coarsened cell-centered BoxArray rather than coarsening a converted one:
-    // on a face BoxArray those two do not commute.
-    const BoxArray cba = amrex::coarsen(vec_mskr[flev]->boxArray(), ratio);
-    const DistributionMapping& dmf = vec_mskr[flev]->DistributionMap();
-
-    MultiFab cmskr(cba,                                  dmf, 1, 0);
-    MultiFab cmsku(amrex::convert(cba, IntVect(1,0,0)),  dmf, 1, 0);
-    MultiFab cmskv(amrex::convert(cba, IntVect(0,1,0)),  dmf, 1, 0);
-    cmskr.ParallelCopy(*vec_mskr[crse_lev], 0, 0, 1);
-    cmsku.ParallelCopy(*vec_msku[crse_lev], 0, 0, 1);
-    cmskv.ParallelCopy(*vec_mskv[crse_lev], 0, 0, 1);
+    // average_down_masked indexes the coarse mask with the same MFIter as its coarsened-fine
+    // temporary, so the mask has to be defined on that layout. It is the same between regrids,
+    // so this builds it once instead of every step.
+    update_avgdown_masks(crse_lev);
+    const MultiFab& cmskr = *vec_mskr_crse_on_fine[crse_lev];
+    const MultiFab& cmsku = *vec_msku_crse_on_fine[crse_lev];
+    const MultiFab& cmskv = *vec_mskv_crse_on_fine[crse_lev];
 
     // Which mask goes with which field follows the ROMS fine2coarse call sites: rmask for the
     // free surface and the tracers, umask and vmask for the momenta.
@@ -2445,6 +2503,12 @@ REMORA::average_down_masked (int crse_lev, const MultiFab& S_fine, MultiFab& S_c
 
     BoxArray cba = amrex::coarsen(S_fine.boxArray(), ratio);
     MultiFab ctmp(cba, S_fine.DistributionMap(), ncomp, 0);
+
+    // One MFIter indexes all four arrays in the loop below, by local box index, so the masks
+    // have to be distributed exactly as S_fine is. Equal DistributionMappings imply equal box
+    // counts, since a ProcessorMap holds one entry per box.
+    AMREX_ALWAYS_ASSERT(msk_fine.DistributionMap() == S_fine.DistributionMap());
+    AMREX_ALWAYS_ASSERT(cmsk.DistributionMap()     == S_fine.DistributionMap());
 
     for (MFIter mfi(ctmp, TilingIfNotGPU()); mfi.isValid(); ++mfi)
     {

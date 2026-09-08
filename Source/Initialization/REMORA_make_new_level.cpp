@@ -482,6 +482,11 @@ void REMORA::resize_stuff(int lev)
     vec_mskv.resize(lev+1);
     vec_mskp.resize(lev+1);
     vec_mskr3d.resize(lev+1);
+    // Indexed by the coarse level of a pair, so lev entries would do; sized like the rest to
+    // keep the indexing uniform.
+    vec_mskr_crse_on_fine.resize(lev+1);
+    vec_msku_crse_on_fine.resize(lev+1);
+    vec_mskv_crse_on_fine.resize(lev+1);
     vec_sstore.resize(lev+1);
 
     vec_cons_full_domain.resize(hires_init_level+1);
