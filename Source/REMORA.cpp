@@ -975,8 +975,9 @@ REMORA::coarsen_masks_with_grow_cells (int crse_lev)
  *
  * Per level pair, over the region the finer level covers: no coarse water point sits over
  * fine points that are all land, which would leave the average-down nothing to divide by.
- * Coarsening makes that unreachable for cell centers but not for faces, since a coarse u-face
- * is open whenever both its cells are wet and their water can sit away from the shared plane.
+ * Coarsening makes that unreachable for cell centers but not for faces: a coarse u-face is
+ * open whenever both its cells are wet, but only the fine faces in its own plane count, and
+ * the wet fine cells that made those coarse cells wet may all lie elsewhere in their blocks.
  */
 void
 REMORA::check_mask_consistency ()
@@ -1058,34 +1059,68 @@ REMORA::check_mask_consistency ()
             const int rx = ratio[0];
             const int ry = ratio[1];
 
+            // Three passes: a cell-centered box stops at hi, so it would miss the high-side
+            // face that average_down_masked does iterate. nodaltilebox partitions the nodal
+            // range; faces shared between boxes are still counted twice, which can only
+            // inflate a diagnostic.
+            const Long lzero = 0;
+
+            // Cell centers: the whole rx by ry block.
             reduce_op.eval(bx, reduce_data, [=] AMREX_GPU_DEVICE (int i, int j, int k)
                 -> ReduceTuple
             {
                 const int ii = i * rx;
                 const int jj = j * ry;
 
-                // Cell centers: the whole rx by ry block.
                 Real wet_r = zero;
                 for (int jref = 0; jref < ry; ++jref) {
                     for (int iref = 0; iref < rx; ++iref) {
                         wet_r += amrex::min(one, fr(ii+iref, jj+jref, k));
                     }
                 }
-                // Faces: only the fine faces lying in the coarse face's plane.
+
+                const bool missed = cr(i,j,k) < zero;
+                return {static_cast<Long>(missed),
+                        static_cast<Long>(!missed && cr(i,j,k) > Real(0.5) && wet_r == zero),
+                        lzero, lzero};
+            });
+
+            // u-faces: only the fine faces in the coarse face's plane. Tests the sentinel too,
+            // so an incomplete copy reports itself instead of failing the > 0.5 test.
+            Box ubx = mfi.nodaltilebox(0); ubx.makeSlab(2,0);
+            reduce_op.eval(ubx, reduce_data, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+                -> ReduceTuple
+            {
+                const int ii = i * rx;
+                const int jj = j * ry;
+
                 Real wet_u = zero;
                 for (int jref = 0; jref < ry; ++jref) {
                     wet_u += amrex::min(one, fu(ii, jj+jref, k));
                 }
+
+                const bool missed = cu(i,j,k) < zero;
+                return {static_cast<Long>(missed), lzero,
+                        static_cast<Long>(!missed && cu(i,j,k) > Real(0.5) && wet_u == zero),
+                        lzero};
+            });
+
+            // v-faces, likewise.
+            Box vbx = mfi.nodaltilebox(1); vbx.makeSlab(2,0);
+            reduce_op.eval(vbx, reduce_data, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+                -> ReduceTuple
+            {
+                const int ii = i * rx;
+                const int jj = j * ry;
+
                 Real wet_v = zero;
                 for (int iref = 0; iref < rx; ++iref) {
                     wet_v += amrex::min(one, fv(ii+iref, jj, k));
                 }
 
-                const bool missed = cr(i,j,k) < zero;
-                return {static_cast<Long>(missed),
-                        static_cast<Long>(!missed && cr(i,j,k) > Real(0.5) && wet_r == zero),
-                        static_cast<Long>(cu(i,j,k) > Real(0.5) && wet_u == zero),
-                        static_cast<Long>(cv(i,j,k) > Real(0.5) && wet_v == zero)};
+                const bool missed = cv(i,j,k) < zero;
+                return {static_cast<Long>(missed), lzero, lzero,
+                        static_cast<Long>(!missed && cv(i,j,k) > Real(0.5) && wet_v == zero)};
             });
         }
         ReduceTuple hv = reduce_data.value(reduce_op);
@@ -1876,20 +1911,6 @@ REMORA::init_only (int lev, Real time)
         init_riv_pos_from_netcdf(lev);
     }
 
-    if (lev==0 and hires_init_level > 0 and solverChoice.ic_type == IC_Type::netcdf) {
-        amrex::Print() << "Reading high resolution initial data" << std::endl;
-        allocate_init_full_domain();
-        // The initial-state cascade is mask-weighted, so a mask has to exist this high up.
-        ensure_full_domain_masks(hires_init_level);
-        init_data_full_domain_from_netcdf();
-        // Biology source is chosen by remora.biology_ic_type, not by ic_type,
-        // so this goes through the same dispatcher as the per-level path.
-        // Must follow init_data_full_domain_from_netcdf: the analytic biology
-        // profiles read temperature.
-        init_biology_ic_full_domain();
-        init_zeta_full_domain_from_netcdf();
-        amrex::Print() << "Done reading in high resolution initial data" << std::endl;
-    }
 #else
     if (solverChoice.ic_type == IC_Type::netcdf) {
         Abort("Not compiled with NetCDF, but remora.ic_type = netcdf reads initial and grid data from file");
@@ -1906,17 +1927,40 @@ REMORA::init_only (int lev, Real time)
     }
 #endif
 
-    if (lev==0 and hires_init_level > 0 and solverChoice.ic_type == IC_Type::analytic) {
-        allocate_init_full_domain();
-        init_full_domain_zeta_from_analytic();
-    }
-
     set_bathymetry(lev);
     // Has to follow set_bathymetry, not precede it as it used to: the mask now has a
     // hires_grid_level lane of its own, which needs the full-domain data read just above,
     // and an analytic mask needs the grid coordinates that set_bathymetry -> set_grid_scale
     // fills on the netcdf path.
     set_masks(lev);
+
+    // Has to sit between set_masks and set_zeta. After set_masks, since
+    // ensure_full_domain_masks seeds level 0 from vec_mskr[0], and init_masks' all-water
+    // placeholder would reduce the weighting below to a plain mean. Before set_zeta, which
+    // reads the vec_zeta_full_domain this fills.
+    if (lev==0 and hires_init_level > 0) {
+        if (solverChoice.ic_type == IC_Type::netcdf) {
+#ifdef REMORA_USE_NETCDF
+            amrex::Print() << "Reading high resolution initial data" << std::endl;
+            allocate_init_full_domain();
+            // The initial-state cascade is mask-weighted, so a mask has to exist this high up.
+            ensure_full_domain_masks(hires_init_level);
+            init_data_full_domain_from_netcdf();
+            // Biology source is chosen by remora.biology_ic_type, not by ic_type,
+            // so this goes through the same dispatcher as the per-level path.
+            // Must follow init_data_full_domain_from_netcdf: the analytic biology
+            // profiles read temperature.
+            init_biology_ic_full_domain();
+            init_zeta_full_domain_from_netcdf();
+            amrex::Print() << "Done reading in high resolution initial data" << std::endl;
+#endif
+        } else if (solverChoice.ic_type == IC_Type::analytic) {
+            allocate_init_full_domain();
+            ensure_full_domain_masks(hires_init_level);
+            init_full_domain_zeta_from_analytic();
+        }
+    }
+
     set_zeta(lev);
     stretch_transform(lev);
 
