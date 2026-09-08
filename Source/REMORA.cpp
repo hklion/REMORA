@@ -2803,11 +2803,11 @@ REMORA::AverageDownTo (int crse_lev)
         for (int icomp = 0; icomp < 2; ++icomp) {
             MultiFab ubar_f(*vec_ubar[crse_lev+1], make_alias, icomp, 1);
             MultiFab ubar_c(*vec_ubar[crse_lev  ], make_alias, icomp, 1);
-            average_down_faces(ubar_f, ubar_c, refRatio(crse_lev), 0);
+            average_down_faces(ubar_f, ubar_c, refRatio(crse_lev), geom[crse_lev]);
 
             MultiFab vbar_f(*vec_vbar[crse_lev+1], make_alias, icomp, 1);
             MultiFab vbar_c(*vec_vbar[crse_lev  ], make_alias, icomp, 1);
-            average_down_faces(vbar_f, vbar_c, refRatio(crse_lev), 0);
+            average_down_faces(vbar_f, vbar_c, refRatio(crse_lev), geom[crse_lev]);
         }
 
         // zeta is deliberately absent: set_zeta_to_Ztavg overwrites all three of its
