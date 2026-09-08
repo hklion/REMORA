@@ -28,7 +28,6 @@ REMORA::store_2d_flux (int lev)
 #endif
     for ( MFIter mfi(*vec_Dubar_new[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi )
     {
-        Array4<Real const> const& pm      = vec_pm[lev]->const_array(mfi);
         Array4<Real const> const& pn      = vec_pn[lev]->const_array(mfi);
         Array4<Real const> const& DU_avg2 = vec_DU_avg2[lev]->const_array(mfi);
         Array4<Real      > const& Dubar   = vec_Dubar_new[lev]->array(mfi);
