@@ -1658,8 +1658,8 @@ private:
     /** \brief build or rebuild the flux register between lev and lev-1 */
     void define_flux_register (int lev);
 
-    /** \brief stop the flux correction driving a tracer negative */
-    void clamp_reflux (int lev, const amrex::MultiFab& pre_reflux);
+    /** \brief apply the lev/lev+1 tracer flux correction onto lev */
+    void reflux_to (int lev);
 
     /** \brief check that fine cell edges sum to the coarse edge across an interface */
     void check_cf_metrics (int crse_lev);

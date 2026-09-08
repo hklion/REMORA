@@ -376,6 +376,56 @@ REMORA::WriteAtIntermediateTime(int step, amrex::Real cur_time)
 }
 
 /**
+ * Apply the tracer flux correction accumulated at the lev/lev+1 interface onto lev.
+ *
+ * @param[in] lev            coarse level of the interface
+ */
+void
+REMORA::reflux_to (int lev)
+{
+    if (!(do_reflux && do_substep) || lev >= finest_level ||
+        solverChoice.coupling_type != CouplingType::two_way) {
+        return;
+    }
+
+    BL_PROFILE("REMORA::reflux_to()");
+
+    // The register holds the correction in Hz*t units, the form the tracer is advanced in.
+    // Reflux into a scratch fab and divide that down, rather than scaling the level into
+    // those units and back: that round trip is inexact for about a tenth of cells, which
+    // perturbs cells the correction never reached and leaves the clamp below unable to tell
+    // which ones it did.
+    MultiFab dcons(cons_new[lev]->boxArray(), cons_new[lev]->DistributionMap(), ncons, 0);
+    dcons.setVal(zero);
+    getAdvFluxReg(lev+1)->Reflux(dcons, 0, 0, ncons);
+
+    const bool clamp = reflux_clamp;
+
+#ifdef _OPENMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+    for (MFIter mfi(*cons_new[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi)
+    {
+        Array4<Real      > const& c  = cons_new[lev]->array(mfi);
+        Array4<Real const> const& dc = dcons.const_array(mfi);
+        Array4<Real const> const& hz = vec_Hz[lev]->const_array(mfi);
+
+        ParallelFor(mfi.tilebox(), ncons, [=] AMREX_GPU_DEVICE (int i, int j, int k, int n)
+        {
+            // No thickness is land or dry: leave it rather than divide by zero.
+            if (dc(i,j,k,n) == zero || hz(i,j,k) <= zero) { return; }
+
+            c(i,j,k,n) += dc(i,j,k,n) / hz(i,j,k);
+
+            // Clamping restores the mass the correction removed, so a step that clamps is
+            // not conservative: ROMS's trade, and why it is an option. Zero suits a
+            // concentration, less so temperature in Celsius.
+            if (clamp && c(i,j,k,n) < zero) { c(i,j,k,n) = zero; }
+        });
+    }
+}
+
+/**
  * @param[in   ] nstep    which step we're on
  * @param[in   ] time     current time
  * @param[in   ] dt_lev0  time step on level 0
@@ -393,54 +443,10 @@ REMORA::post_timestep (int nstep, Real time, Real dt_lev0)
     {
         for (int lev = finest_level-1; lev >= 0; lev--)
         {
-            // This call refluxes from the lev/lev+1 interface onto lev. The register holds
-            // the correction in Hz*t units, the form the tracer is advanced in, so weight
-            // by Hz across the call and divide back out afterwards.
-            if (do_reflux && do_substep) {
-                // Hz has one component and the tracers have ncons, so scale by hand. Cells
-                // with no thickness are land or dry: leave them rather than divide by zero.
-                auto scale_by_Hz = [&] (bool invert)
-                {
-#ifdef _OPENMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-                    for (MFIter mfi(*cons_new[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi)
-                    {
-                        Array4<Real      > const& c  = cons_new[lev]->array(mfi);
-                        Array4<Real const> const& hz = vec_Hz[lev]->const_array(mfi);
-                        ParallelFor(mfi.tilebox(), ncons,
-                        [=] AMREX_GPU_DEVICE (int i, int j, int k, int n)
-                        {
-                            if (hz(i,j,k) > zero) {
-                                c(i,j,k,n) = invert ? c(i,j,k,n) / hz(i,j,k)
-                                                    : c(i,j,k,n) * hz(i,j,k);
-                            }
-                        });
-                    }
-                };
+            // Before the average-down: refluxing writes coarse cells under the fine grid on
+            // the assumption they are about to be overwritten from it.
+            reflux_to(lev);
 
-                // Keep what the correction is about to overwrite, so the clamp below can be
-                // confined to the cells it actually changed.
-                MultiFab pre_reflux;
-                if (reflux_clamp) {
-                    pre_reflux.define(cons_new[lev]->boxArray(), cons_new[lev]->DistributionMap(),
-                                      ncons, 0);
-                    MultiFab::Copy(pre_reflux, *cons_new[lev], 0, 0, ncons, 0);
-                }
-
-                scale_by_Hz(false);
-                getAdvFluxReg(lev+1)->Reflux(*cons_new[lev], 0, 0, ncons);
-                scale_by_Hz(true);
-
-                if (reflux_clamp) {
-                    clamp_reflux(lev, pre_reflux);
-                }
-            }
-
-            // We need to do this before anything else because refluxing changes the
-            // values of coarse cells underneath fine grids with the assumption they'll
-            // be over-written by averaging down
-            //
             AverageDownTo(lev);
         }
     }
@@ -2278,7 +2284,7 @@ REMORA::ReadParameters ()
     // two-way coupling to do anything.
     pp.queryAdd("do_reflux", do_reflux);
 
-    // Whether that correction may drive a tracer negative. See clamp_reflux.
+    // Whether to zero a tracer the correction drives negative, as ROMS does.
     pp.queryAdd("reflux_clamp", reflux_clamp);
 
     // See check_cf_metrics. Off by default: it is a property of the grid, so one run says as
@@ -2542,36 +2548,6 @@ REMORA::clear_avgdown_masks (int lev)
             vec_msku_crse_on_fine[crse_lev].reset();
             vec_mskv_crse_on_fine[crse_lev].reset();
         }
-    }
-}
-
-/**
- * Stop the tracer flux correction from driving a tracer negative, as ROMS does in
- * correct_tracer_tile (nesting.F): Tvalue = MAX(0, t - cff*(TFF-TFC)).
- *
- * @param[in   ] lev         level the correction was applied to
- * @param[in   ] pre_reflux  the tracers as they stood before it
- */
-void
-REMORA::clamp_reflux (int lev, const MultiFab& pre_reflux)
-{
-#ifdef _OPENMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-    for (MFIter mfi(*cons_new[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi)
-    {
-        Array4<Real      > const& c   = cons_new[lev]->array(mfi);
-        Array4<Real const> const& pre = pre_reflux.const_array(mfi);
-        // Only cells the correction changed. Clamping restores the mass it removed, so a
-        // step that clamps is not conservative: ROMS's trade, and why this is an option.
-        // Zero suits a concentration, less so temperature in Celsius; ROMS clamps that too.
-        ParallelFor(mfi.tilebox(), ncons,
-        [=] AMREX_GPU_DEVICE (int i, int j, int k, int n)
-        {
-            if (c(i,j,k,n) < zero && c(i,j,k,n) != pre(i,j,k,n)) {
-                c(i,j,k,n) = zero;
-            }
-        });
     }
 }
 
