@@ -1052,9 +1052,7 @@ REMORA::calculate_nodal_masks (int lev)
 /**
  * Rebuild the u-, v- and psi-point masks from vec_mskr and fill their ghost cells.
  *
- * The psi mask has two definitions here: the plain product, and ROMS set_masks.F's rule, which
- * also yields 2 at a free-slip corner. Which one a level got used to depend on how it was
- * built; keying it off mask_type keeps it uniform across levels.
+ * Every lane goes through here, so the levels cannot end up with different definitions.
  *
  * @param[in   ] lev    level to operate on
  */
@@ -1062,6 +1060,9 @@ void
 REMORA::update_nodal_masks (int lev)
 {
     calculate_nodal_masks(lev);
+    // The psi mask has two definitions: the plain product calculate_nodal_masks just wrote,
+    // and ROMS set_masks.F's rule, which also yields 2 at a free-slip corner. Which one a
+    // level got used to depend on how it was built; keying it off mask_type keeps it uniform.
     if (solverChoice.mask_type == MaskType::netcdf) {
         update_mskp(lev);
     }

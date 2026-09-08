@@ -969,15 +969,9 @@ REMORA::coarsen_masks_with_grow_cells (int crse_lev)
  * Check the land-sea masks for what the rest of the code relies on. Only runs when
  * remora.check_mask_consistency is set; remora.mask_consistency picks abort or warn.
  *
- * Per level: the masks hold only the values they are meant to, since the plotfile writer
- * decides what to blank by comparing them against 0 exactly, and no water cell has a
- * non-positive depth, which stretch_transform turns into quiet garbage rather than a crash.
- *
- * Per level pair, over the region the finer level covers: no coarse water point sits over
- * fine points that are all land, which would leave the average-down nothing to divide by.
- * Coarsening makes that unreachable for cell centers but not for faces: a coarse u-face is
- * open whenever both its cells are wet, but only the fine faces in its own plane count, and
- * the wet fine cells that made those coarse cells wet may all lie elsewhere in their blocks.
+ * Per level, that the masks hold only the values they are meant to and that no water cell has
+ * a non-positive depth. Per level pair, over the region the finer level covers, that no coarse
+ * water point sits over fine points that are all land.
  */
 void
 REMORA::check_mask_consistency ()
@@ -989,7 +983,10 @@ REMORA::check_mask_consistency ()
 
     Long nbad_val = 0, nbad_h = 0, ndry_r = 0, ndry_u = 0, ndry_v = 0, nmissed = 0;
 
-    // Per-level checks
+    // Per-level checks. Mask values matter because the plotfile writer decides what to blank
+    // by comparing them against 0 exactly, so a fractional mask stops masking; a water cell
+    // with h <= 0 matters because stretch_transform divides by hc + h, giving quiet garbage
+    // rather than a crash.
     for (int lev = 0; lev <= finest_level; ++lev)
     {
         ReduceOps<ReduceOpSum, ReduceOpSum> reduce_op;
@@ -1024,7 +1021,12 @@ REMORA::check_mask_consistency ()
         nbad_h   += amrex::get<1>(hv);
     }
 
-    // Level-pair checks, over the region the finer level covers
+    // Level-pair checks, over the region the finer level covers. A coarse water point over
+    // nothing but land would leave the average-down nothing to divide by. Coarsening makes
+    // that unreachable for cell centers -- a wet coarse cell is wet because some fine cell in
+    // its own block is -- but not for faces: a coarse u-face is open whenever both its cells
+    // are wet, only the fine faces in its own plane count, and the wet fine cells that made
+    // those coarse cells wet may all lie elsewhere in their blocks.
     for (int crse_lev = 0; crse_lev < finest_level; ++crse_lev)
     {
         const int flev = crse_lev + 1;
@@ -1191,10 +1193,8 @@ REMORA::check_mask_consistency ()
  *
  * Averaging every fine cell would mix in whatever the grid file holds under land, which on a
  * ROMS grid is a fill value with no physical meaning. A wet coarse cell should take the depth
- * of the water under it. Where every fine cell is land there is none to average, but h still
- * has to hold something, so that falls back to the plain mean -- which also makes an all-wet
- * or all-land group reproduce average_down_with_grow_cells bit for bit. See
- * REMORA_MaskedAverageDown.H for why the arithmetic is written the way it is.
+ * of the water under it. See REMORA_MaskedAverageDown.H for why the arithmetic is written the
+ * way it is.
  *
  * @param[in   ] crse_lev   level to coarsen onto
  */
@@ -1222,6 +1222,9 @@ REMORA::coarsen_bathymetry_with_grow_cells (int crse_lev)
                 sum_all += hf;
             }
         }
+        // All-land: no water to average, but h still has to hold something, so fall back to
+        // the plain mean. That also makes an all-wet or all-land group reproduce
+        // average_down_with_grow_cells bit for bit.
         crsema[box_no](i,j,k,n) = (den > zero)
                                 ? num * (one/den)
                                 : sum_all * (one/Real(ratio[0]*ratio[1]));
@@ -2456,8 +2459,7 @@ REMORA::clear_avgdown_masks (int lev)
  *
  * The masks are a function of position alone, so between regrids this is the same answer every
  * step; building it once turns three allocations and three ParallelCopy calls per step into
- * three per regrid. clear_avgdown_masks drops the cache when a mask is rewritten, and the
- * layout comparison below catches anything that reaches here without going through it.
+ * three per regrid.
  *
  * @param[in   ] crse_lev   coarse level of the pair
  */
@@ -2471,6 +2473,8 @@ REMORA::update_avgdown_masks (int crse_lev)
     const BoxArray cba = amrex::coarsen(vec_mskr[flev]->boxArray(), ratio);
     const DistributionMapping& dmf = vec_mskr[flev]->DistributionMap();
 
+    // clear_avgdown_masks drops the cache whenever a mask is rewritten; this catches anything
+    // that gets here without having gone through it, by rebuilding when the layout has moved.
     if (vec_mskr_crse_on_fine[crse_lev] &&
         vec_mskr_crse_on_fine[crse_lev]->boxArray() == cba &&
         vec_mskr_crse_on_fine[crse_lev]->DistributionMap() == dmf) {
@@ -2526,8 +2530,7 @@ REMORA::AverageDownTo (int crse_lev)
  *
  * Follows amrex::average_down's non-MFIter-safe branch, since coarsen(grids[flev]) does not
  * match grids[crse_lev] in general: compute onto a temporary on the coarsened-fine layout,
- * then ParallelCopy that onto the coarse level. The periodicity arguments match what
- * average_down and average_down_faces pass.
+ * then ParallelCopy that onto the coarse level.
  *
  * @param[in   ] crse_lev   level to average down to
  * @param[in   ] S_fine     fine-level field
@@ -2576,6 +2579,9 @@ REMORA::average_down_masked (int crse_lev, const MultiFab& S_fine, MultiFab& S_c
     }
     Gpu::streamSynchronize();
 
+    // Periodicity arguments as amrex::average_down and average_down_faces pass them: the
+    // cell-centered copy takes none, the face copy needs it so shared faces across a periodic
+    // boundary agree.
     if (face_dir < 0) {
         S_crse.ParallelCopy(ctmp, 0, 0, ncomp);
     } else {
