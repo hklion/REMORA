@@ -21,14 +21,8 @@
  * zero by land. That is not conservative; ROMS makes the same trade deliberately. The coarse
  * mask has the final say on wet or dry.
  *
- * den == 0 under a wet coarse point cannot happen once check_mask_consistency passes, so the
- * kernels write zero rather than trying to diagnose it from a device kernel.
- *
- * Where every fine point is wet this has to reproduce amrex_avgdown and amrex_avgdown_faces
- * bit for bit, or every multilevel answer moves in its last bit. Hence AMReX's iteration
- * order, the mask multiplying the value before it is accumulated (x * 1.0 == x), and the
- * division written as a multiplication by the reciprocal, which is exactly AMReX's volfrac.
- * Writing num/den instead would differ in the last bit.
+ * Where every fine point is wet these have to reproduce amrex_avgdown and amrex_avgdown_faces
+ * bit for bit, or every existing multilevel answer moves in its last bit.
  */
 namespace REMORAMaskedAvgDown {
 
@@ -51,6 +45,8 @@ void avgdown_masked (int i, int j, int k, int n,
 
     Real num = Real(0.0);
     Real den = Real(0.0);
+    // AMReX's loop order, and the mask multiplying the value before it is accumulated rather
+    // than after (x * 1.0 == x), are what make the all-wet case bit-identical to amrex_avgdown.
     for (int kref = 0; kref < facz; ++kref) {
     for (int jref = 0; jref < facy; ++jref) {
     for (int iref = 0; iref < facx; ++iref) {
@@ -59,6 +55,9 @@ void avgdown_masked (int i, int j, int k, int n,
         den += m;
     }}}
 
+    // Multiplication by the reciprocal, not num/den: this is AMReX's volfrac, and dividing
+    // would differ in the last bit. den == 0 under a wet coarse point cannot happen once
+    // check_mask_consistency passes, so write zero rather than diagnose it from a kernel.
     crse(i,j,k,n+ccomp) = (den > Real(0.0))
                         ? num * (Real(1.0)/den) * cmsk(i,j,0)
                         : Real(0.0);
@@ -108,6 +107,7 @@ void avgdown_faces_masked (int i, int j, int k, int n,
         }}
     }
 
+    // As in avgdown_masked: reciprocal rather than divide, and zero when nothing is wet.
     crse(i,j,k,n+ccomp) = (den > Real(0.0))
                         ? num * (Real(1.0)/den) * cmsk(i,j,0)
                         : Real(0.0);
