@@ -1224,7 +1224,9 @@ REMORA::coarsen_bathymetry_with_grow_cells (int crse_lev)
         }
         // All-land: no water to average, but h still has to hold something, so fall back to
         // the plain mean. That also makes an all-wet or all-land group reproduce
-        // average_down_with_grow_cells bit for bit.
+        // average_down_with_grow_cells bit for bit. This is where the bathymetry parts company
+        // with avgdown_masked, which multiplies by the coarse mask and so leaves an all-land
+        // point at zero: a free surface under land need not hold anything, a depth does.
         crsema[box_no](i,j,k,n) = (den > zero)
                                 ? num * (one/den)
                                 : sum_all * (one/Real(ratio[0]*ratio[1]));
@@ -2667,10 +2669,10 @@ namespace {
  */
 void derive_face_mask (const MultiFab& mskr, MultiFab& mskf, int idir)
 {
-    const IntVect nd = (idir == 0) ? IntVect(1,0,0) : IntVect(0,1,0);
+    const IntVect ndir = (idir == 0) ? IntVect(1,0,0) : IntVect(0,1,0);
     // One ring narrower than the rho mask in the normal direction, where the stencil reaches.
-    const IntVect ng = max(mskr.nGrowVect() - nd, IntVect(0));
-    mskf.define(convert(mskr.boxArray(), nd), mskr.DistributionMap(), 1, ng);
+    const IntVect ng = max(mskr.nGrowVect() - ndir, IntVect(0));
+    mskf.define(convert(mskr.boxArray(), ndir), mskr.DistributionMap(), 1, ng);
     mskf.setVal(one);
 
     for (MFIter mfi(mskf, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
