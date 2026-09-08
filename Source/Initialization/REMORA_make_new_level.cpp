@@ -326,6 +326,14 @@ REMORA::RemakeLevel (int lev, Real time, const BoxArray& ba, const DistributionM
         }
     }
 
+    // This level is the coarse side of the next one's flux register, which RemakeLevel will
+    // not rebuild for itself if its own grids come back unchanged.
+    if (ba != ba_old || dm != dm_old) {
+        if (lev+1 < int(advflux_reg.size()) && advflux_reg[lev+1]) {
+            define_flux_register(lev+1);
+        }
+    }
+
 #ifdef REMORA_USE_PARTICLES
     particleData.Redistribute();
 #endif

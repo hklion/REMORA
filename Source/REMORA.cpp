@@ -2683,6 +2683,11 @@ REMORA::define_flux_register (int lev)
                                                cons_new[lev-1]->DistributionMap(),
                                                geom[lev], geom[lev-1],
                                                ref_ratio[lev-1], lev, ncons));
+
+    // The constructor sizes the accumulators without zeroing them, and Reflux adds all of
+    // m_crse_data to the state, so a register must be zero before its first use whichever
+    // path built it.
+    advflux_reg[lev]->reset();
 }
 
 /**
