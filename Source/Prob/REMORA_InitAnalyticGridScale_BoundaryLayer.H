@@ -1,17 +1,10 @@
-    // Cell width grows linearly across the domain in x; pn is uniform.
+    // Cell width grows linearly across the domain in x; pn is uniform. Taken as the
+    // difference of a face-position mapping X(xi) = c1*xi + c2*xi^2, xi = i / n_cell_x, so
+    // the widths telescope and a level's cells subdivide its parent's exactly. Setting the
+    // width from the cell index instead would give a refined level cells the physical size
+    // of its parent's, and no conservative flux at the interface (see check_cf_metrics).
     //
-    // Expressed as a face-position mapping rather than a width per cell index. The two agree
-    // at the base resolution, but only the mapping survives refinement: a width taken from
-    // the index and the domain's cell count gives a refined level cells the same physical
-    // size as its parent's, so the levels cover different ground. Differencing a mapping
-    // instead makes the widths telescope -- a level's cells subdivide its parent's exactly,
-    // whatever the ratio, which is what lets the imposed mass flux at a coarse-fine interface
-    // conserve (see REMORA::check_cf_metrics).
-    //
-    // The constants reproduce the original spacing at the 39-cell base resolution:
-    //     dx(i) = first_width + width_growth * i
-    // whose cumulative sum to face i, with xi = i / n_cell_x, is
-    //     X(xi) = c1 * xi + c2 * xi^2
+    // The constants reproduce dx(i) = first_width + width_growth*i at 39 cells, exactly.
     constexpr Real first_width  = Real(725.0);
     constexpr Real width_growth = Real(50.0);
     constexpr Real n_base       = Real(39.0);

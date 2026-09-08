@@ -1,11 +1,8 @@
 # ------------------  INPUTS TO MAIN PROGRAM  -------------------
 #
-# BoundaryLayer refined, to exercise check_cf_metrics on a grid whose cells are not all the
-# same width. Everywhere else pm and pn are constant, so the identity the check asserts --
-# fine cell edges summing to the coarse edge -- holds for a reason that says nothing about
-# the general case. Here dx varies by a factor of nearly four across the domain.
-#
-# check_cf_metrics aborts past remora.check_cf_tol, so completing the run is the assertion.
+# BoundaryLayer refined, so check_cf_metrics runs on a grid whose cells are not all the same
+# width: dx varies by nearly a factor of four across the domain. It aborts past
+# remora.check_cf_tol, so completing the run is the assertion.
 #
 remora.prob_name = BoundaryLayer
 
