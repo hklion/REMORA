@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <string>
 #include <type_traits>
 
 #include <AMReX_REAL.H>
@@ -36,10 +38,12 @@
  * -- and in the `time_ref = -2` conversion it does, which rounds differently
  * from `INT` on the negative side of the epoch -- `std::floor` is used here.
  *
- * Hours, minutes and seconds are not returned. ROMS derives them from the day
- * fraction through the tolerant rounding helper in `round_mod`, and
- * half-porting that would be worse than leaving it out; the day fraction is
- * available from remora_caldate's `yday` for a caller that needs it.
+ * remora_caldate does not return hours, minutes or seconds. ROMS derives them
+ * from the day fraction through the tolerant rounding helper in `round_mod`,
+ * and half-porting that would be worse than leaving it out; the day fraction is
+ * available from remora_caldate's `yday` for a caller that needs it. The
+ * reference date does carry a time of day -- `remora.time_ref` can name one --
+ * and remora_ref_clock returns it.
  *
  * Two quirks of the `time_ref = -2` calendar carry over, both ROMS's and both
  * confirmed against the Fortran rather than inferred:
@@ -140,9 +144,52 @@ amrex::Real remora_datenum (amrex::Real time_ref, int year, int month, int day,
 }
 
 /**
+ * \brief Reference date the model clock counts from, implied by \p time_ref.
+ *
+ * ROMS `ref_clock`'s date decode, the fields behind `Rclock%string`. The
+ * sentinel calendars carry ROMS's hardcoded dates: 0000-12-30 for 360_day,
+ * whose epoch is shifted back a day to undo a historical one-day offset,
+ * 1968-05-23 for the truncated Julian day, and 0001-01-01 for `time_ref = 0`.
+ */
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+void remora_ref_clock (amrex::Real time_ref, int& year, int& month, int& day,
+                       int& hour, int& minute, int& second) noexcept
+{
+    const int cal = static_cast<int>(time_ref);
+
+    if (cal > 0) {
+        // Decode yyyymmdd.dd. The clamps are ROMS's, and they are what keeps a
+        // malformed value from indexing off the end of the calendar.
+        year = std::max(1, static_cast<int>(time_ref * amrex::Real(0.0001)));
+        month = std::min(12, std::max(1, static_cast<int>(
+            (time_ref - amrex::Real(year * 10000)) * amrex::Real(0.01))));
+        const amrex::Real fday = time_ref -
+            std::trunc(time_ref * amrex::Real(0.01)) * amrex::Real(100.0);
+        day = std::max(1, static_cast<int>(fday));
+        const amrex::Real sec = (fday - std::trunc(fday)) * amrex::Real(86400.0);
+        hour = static_cast<int>(sec / amrex::Real(3600.0));
+        minute = static_cast<int>(std::fmod(sec, amrex::Real(3600.0)) /
+                                  amrex::Real(60.0));
+        second = static_cast<int>(std::fmod(sec, amrex::Real(60.0)));
+
+    } else if (cal == -1) {
+        year = 0; month = 12; day = 30;       // 360_day, epoch shifted back a day
+        hour = 0; minute = 0; second = 0;
+
+    } else if (cal == -2) {
+        year = 1968; month = 5; day = 23;     // truncated Julian day
+        hour = 0; minute = 0; second = 0;
+
+    } else {
+        year = 1; month = 1; day = 1;         // proleptic Gregorian
+        hour = 0; minute = 0; second = 0;
+    }
+}
+
+/**
  * \brief Day number of the reference date implied by \p time_ref.
  *
- * ROMS `ref_clock`, reduced to the one field the rest of this header needs:
+ * ROMS `ref_clock`, reduced to the one field most of this header needs:
  * `Rclock%DateNumber(1)`. The two negative calendars carry hardcoded values in
  * ROMS -- 359 for 360_day, whose epoch is shifted to 0000-12-30 to undo a
  * historical one-day offset, and 2440000 for the truncated Julian day.
@@ -152,30 +199,19 @@ amrex::Real remora_ref_datenum (amrex::Real time_ref) noexcept
 {
     const int cal = static_cast<int>(time_ref);
 
-    if (cal > 0) {
-        // Decode yyyymmdd.dd. The clamps are ROMS's, and they are what keeps a
-        // malformed value from indexing off the end of the calendar.
-        const int iyear = std::max(1, static_cast<int>(time_ref * amrex::Real(0.0001)));
-        const int month = std::min(12, std::max(1, static_cast<int>(
-            (time_ref - amrex::Real(iyear * 10000)) * amrex::Real(0.01))));
-        const amrex::Real day = time_ref -
-            std::trunc(time_ref * amrex::Real(0.01)) * amrex::Real(100.0);
-        const int iday = std::max(1, static_cast<int>(day));
-        const amrex::Real sec = (day - std::trunc(day)) * amrex::Real(86400.0);
-        const int ihour = static_cast<int>(sec / amrex::Real(3600.0));
-        const int minute = static_cast<int>(std::fmod(sec, amrex::Real(3600.0)) /
-                                            amrex::Real(60.0));
-        const int isec = static_cast<int>(std::fmod(sec, amrex::Real(60.0)));
-        return remora_datenum(time_ref, iyear, month, iday, ihour, minute,
-                              amrex::Real(isec));
-    }
     if (cal == -1) {
         return amrex::Real(359.0);            // 0000-12-30 in the 360_day calendar
     }
     if (cal == -2) {
         return amrex::Real(2440000.0);        // 1968-05-23, truncated Julian offset
     }
-    return remora_datenum(time_ref, 1, 1, 1); // 0001-01-01, equals 367
+
+    // Gregorian and proleptic Gregorian, including time_ref = 0, whose
+    // 0001-01-01 comes back from remora_ref_clock and equals 367.
+    int year, month, day, hour, minute, second;
+    remora_ref_clock(time_ref, year, month, day, hour, minute, second);
+    return remora_datenum(time_ref, year, month, day, hour, minute,
+                          amrex::Real(second));
 }
 
 /**
@@ -368,6 +404,48 @@ bool remora_time_ref_is_representable (amrex::Real time_ref) noexcept
         return true;
     }
     return std::is_same<amrex::Real, double>::value;
+}
+
+/**
+ * \brief CF calendar name for \p time_ref. ROMS `ref_clock`'s `Rclock%calendar`.
+ *
+ * Written next to every time stamp in NetCDF output, so a reader can tell which
+ * calendar the model clock is on.
+ */
+AMREX_FORCE_INLINE
+std::string remora_ref_calendar (amrex::Real time_ref)
+{
+    const int cal = static_cast<int>(time_ref);
+
+    if (cal == -1) {
+        return "360_day";
+    }
+    if (cal == -2) {
+        return "gregorian";
+    }
+    return "proleptic_gregorian";
+}
+
+/**
+ * \brief Reference date as `YYYY-MM-DD hh:mm:ss`. ROMS `ref_clock`'s `Rclock%string`.
+ *
+ * The "since" half of a CF time-units attribute: prefix `days since` or
+ * `seconds since` to get the units of a time stamp on the model clock. Host
+ * only, since it builds a std::string.
+ */
+AMREX_FORCE_INLINE
+std::string remora_ref_date_string (amrex::Real time_ref)
+{
+    int year, month, day, hour, minute, second;
+    remora_ref_clock(time_ref, year, month, day, hour, minute, second);
+
+    // ROMS FORMAT (i4.4,'-',i2.2,'-',i2.2,1x,i2.2,':',i2.2,':',i2.2). Sized for
+    // the widest an int can print in all six fields, not the 19 characters a
+    // real date takes, so the compiler can see the format never truncates.
+    char buf[6 * 11 + 5 + 1];
+    std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d",
+                  year, month, day, hour, minute, second);
+    return std::string(buf);
 }
 
 #endif

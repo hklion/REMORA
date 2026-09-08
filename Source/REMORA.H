@@ -1422,11 +1422,6 @@ private:
                          int coordinatorProc = amrex::ParallelDescriptor::IOProcessorNumber(),
                          int allow_empty_mf = 0);
 
-    /** \brief Start time in the time series of boundary data */
-    amrex::Real start_bdy_time;
-    /** \brief Interval between boundary data times */
-    amrex::Real bdy_time_interval;
-
     /** \brief Whether to output NetCDF files as a single history file with several time steps */
     static bool write_history_file;
 
