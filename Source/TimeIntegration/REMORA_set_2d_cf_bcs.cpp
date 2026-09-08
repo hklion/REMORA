@@ -80,13 +80,16 @@ REMORA::store_2d_flux (int lev)
  *
  *     ubar_f = Dubar_c / D_f,    D_f = 0.5*(h + zeta)_{i-1} + 0.5*(h + zeta)_i
  *
+ * D comes from know, the current state, as ROMS builds it from indx1; knew is only the slot
+ * being written.
+ *
  * Momentum only. setup_step resets all three zeta components to Zt_avg1, so what a finer
  * level interpolates for the free surface is already the parent's fast-time average -- as in
  * ROMS, where set_zeta runs ahead of put_refine2d.
  *
  * @param[in] lev            level of refinement
  * @param[in] time           simulation time to interpolate the parent's flux to
- * @param[in] know           zeta time component holding the current free surface
+ * @param[in] know           zeta time component to take the sea surface height from
  * @param[in] knew           ubar/vbar time component to set
  */
 void
