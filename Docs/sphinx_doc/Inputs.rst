@@ -496,8 +496,7 @@ may also be 2, the free-slip factor), that no water cell has a non-positive dept
 coarse water point sits over fine points that are all land, which would leave the mask-weighted
 average nothing to divide by. It checks the machinery rather than the input, so it is worth
 enabling when bringing up a new grid but not in production; the regression suite runs with it on.
-``remora.mask_consistency`` chooses what happens on failure, and is read only when the check is
-on.
+``remora.mask_consistency`` chooses what happens on failure.
 
 .. _list-of-parameters-mask:
 
