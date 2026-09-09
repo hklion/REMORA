@@ -82,7 +82,7 @@ remora.air_pressure = 1013.48
 # type=Real; method=queryAdd
 remora.air_temperature = 23.567
 
-# source: Source/REMORA_DataStruct.H:241
+# source: Source/REMORA_DataStruct.H:246
 # type=bool; method=queryAdd
 remora.atm2ocn_flux_mode = <UNKNOWN_DEFAULT>
 
@@ -102,19 +102,19 @@ remora.bdy_time_varname = <UNKNOWN_DEFAULT>
 # type=Vector<std::string>; method=queryAdd
 remora.bdy_u_time_varname = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA.cpp:1944
+# source: Source/REMORA.cpp:2331
 # type=Vector<std::string>; method=queryAdd
 remora.bdy_ubar_time_varname = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA.cpp:1943
+# source: Source/REMORA.cpp:2330
 # type=Vector<std::string>; method=queryAdd
 remora.bdy_v_time_varname = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA.cpp:1945
+# source: Source/REMORA.cpp:2332
 # type=Vector<std::string>; method=queryAdd
 remora.bdy_vbar_time_varname = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA.cpp:1946
+# source: Source/REMORA.cpp:2333
 # type=Vector<std::string>; method=queryAdd
 remora.bdy_zeta_time_varname = <UNKNOWN_DEFAULT>
 
@@ -170,19 +170,23 @@ remora.cfl = <UNKNOWN_DEFAULT>
 # type=Real; method=queryAdd
 remora.change_max = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA.cpp:1742
+# source: Source/REMORA.cpp:2129
 # type=string; method=queryAdd
 remora.check_file = chk
 
-# source: Source/REMORA.cpp:1743
+# source: Source/REMORA.cpp:2130
 # type=int; method=queryAdd
 remora.check_int = -57600
 
-# source: Source/REMORA.cpp:1744
+# source: Source/REMORA.cpp:2131
 # type=Real; method=queryAdd
 remora.check_int_time = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA.cpp:1849
+# Off by default: the masks are derived from one specification, so this validates that machinery rather than user input. Worth paying for in the test suite and when bringing up a new grid, not in production.
+# type=bool; method=queryAdd
+remora.check_mask_consistency = <UNKNOWN_DEFAULT>
+
+# source: Source/REMORA.cpp:2236
 # type=bool; method=queryAdd
 remora.chunk_history_file = <UNKNOWN_DEFAULT>
 
@@ -222,7 +226,7 @@ remora.coriolis_type = beta_plane
 # type=string; method=queryAdd
 remora.coupling_type = TwoWay
 
-# source: Source/REMORA.cpp:1761
+# source: Source/REMORA.cpp:2148
 # type=Vector<std::string>; method=queryarr
 remora.data_log = <UNKNOWN_DEFAULT>
 
@@ -250,7 +254,7 @@ remora.do_rivers_scalar = <UNKNOWN_DEFAULT>
 # type=bool; method=queryAdd
 remora.do_rivers_temp = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA_DataStruct.H:274
+# source: Source/REMORA_DataStruct.H:279
 # type=bool; method=queryAdd
 remora.eminusp = true
 
@@ -258,7 +262,7 @@ remora.eminusp = true
 # type=bool; method=queryAdd
 remora.eminusp_correct_ssh = true
 
-# source: Source/REMORA_DataStruct.H:270
+# source: Source/REMORA_DataStruct.H:275
 # type=Real; method=query
 remora.eminusp_value = <UNKNOWN_DEFAULT>
 
@@ -266,7 +270,7 @@ remora.eminusp_value = <UNKNOWN_DEFAULT>
 # type=string; method=queryAdd
 remora.eos_type = linear
 
-# source: Source/REMORA.cpp:1745
+# source: Source/REMORA.cpp:2132
 # type=bool; method=queryAdd
 remora.expand_plotvars_to_unif_rr = <UNKNOWN_DEFAULT>
 
@@ -466,7 +470,7 @@ remora.fennel.wPhy = <UNKNOWN_DEFAULT>
 # type=Real; method=queryAdd
 remora.fennel.wSDet = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA.cpp:1769
+# source: Source/REMORA.cpp:2156
 # type=int; method=queryAdd
 remora.file_min_digits = 5
 
@@ -498,35 +502,35 @@ remora.gls_N = -1.0
 # type=Real; method=queryAdd
 remora.gls_P = 3.0
 
-# source: Source/REMORA_DataStruct.H:686
+# source: Source/REMORA_DataStruct.H:706
 # type=Real; method=queryAdd
 remora.gls_Pmin = 1.0e-12
 
-# source: Source/REMORA_DataStruct.H:689
+# source: Source/REMORA_DataStruct.H:709
 # type=Real; method=queryAdd
 remora.gls_c1 = 1.44
 
-# source: Source/REMORA_DataStruct.H:690
+# source: Source/REMORA_DataStruct.H:710
 # type=Real; method=queryAdd
 remora.gls_c2 = 1.92
 
-# source: Source/REMORA_DataStruct.H:691
+# source: Source/REMORA_DataStruct.H:711
 # type=Real; method=queryAdd
 remora.gls_c3m = -0.4
 
-# source: Source/REMORA_DataStruct.H:692
+# source: Source/REMORA_DataStruct.H:712
 # type=Real; method=queryAdd
 remora.gls_c3p = 1.0
 
-# source: Source/REMORA_DataStruct.H:688
+# source: Source/REMORA_DataStruct.H:708
 # type=Real; method=queryAdd
 remora.gls_cmu0 = 0.5477
 
-# source: Source/REMORA_DataStruct.H:693
+# source: Source/REMORA_DataStruct.H:713
 # type=Real; method=queryAdd
 remora.gls_sigk = 1.0
 
-# source: Source/REMORA_DataStruct.H:694
+# source: Source/REMORA_DataStruct.H:714
 # type=Real; method=queryAdd
 remora.gls_sigp = 1.3
 
@@ -554,7 +558,7 @@ remora.hires_init_level = <UNKNOWN_DEFAULT>
 # type=string; method=queryAdd
 remora.horizontal_mixing_type = analytic
 
-# source: Source/REMORA_DataStruct.H:435
+# source: Source/REMORA_DataStruct.H:440
 # type=string; method=queryAdd
 remora.ic_bc_type = analytic
 
@@ -562,15 +566,15 @@ remora.ic_bc_type = analytic
 # type=string; method=queryAdd
 remora.ic_type = analytic
 
-# source: Source/REMORA_DataStruct.H:198
+# source: Source/REMORA_DataStruct.H:203
 # type=bool; method=queryAdd
 remora.init_ana_T = true
 
-# source: Source/REMORA_DataStruct.H:200
+# source: Source/REMORA_DataStruct.H:205
 # type=bool; method=queryAdd
 remora.init_l0int_T = false
 
-# source: Source/REMORA_DataStruct.H:196
+# source: Source/REMORA_DataStruct.H:201
 # type=bool; method=queryAdd
 remora.init_l1ad_T = false
 
@@ -594,15 +598,15 @@ remora.longwave_netcdf_varname = <UNKNOWN_DEFAULT>
 # type=Real; method=queryAdd
 remora.longwave_radiation_flux = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA_DataStruct.H:263
+# source: Source/REMORA_DataStruct.H:268
 # type=Real; method=query
 remora.lwrad = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA_DataStruct.H:731
+# source: Source/REMORA_DataStruct.H:751
 # type=Real; method=queryAdd
 remora.m2nudg = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA_DataStruct.H:732
+# source: Source/REMORA_DataStruct.H:752
 # type=Real; method=queryAdd
 remora.m3nudg = <UNKNOWN_DEFAULT>
 
@@ -629,6 +633,10 @@ remora.m_name.particle_box_lo = <UNKNOWN_DEFAULT>
 # We default to placing the particles randomly within each cell, but can override this for regression testing
 # type=bool; method=queryAdd
 remora.m_name.place_randomly_in_cells = true
+
+# that machinery rather than user input. Worth paying for in the test suite and when bringing up a new grid, not in production.
+# type=string; method=queryAdd
+remora.mask_consistency = abort
 
 # If initial condition type is netcdf, default to netcdf masks
 # type=string; method=queryAdd
@@ -674,7 +682,7 @@ remora.nc_river_file = "idRiv_riv_v0.2_classic64.nc"
 # type=int; method=queryAdd
 remora.ndtfast = 0
 
-# source: Source/REMORA.cpp:1747
+# source: Source/REMORA.cpp:2134
 # type=Real; method=query
 remora.netcdf_fill_value = <UNKNOWN_DEFAULT>
 
@@ -682,7 +690,7 @@ remora.netcdf_fill_value = <UNKNOWN_DEFAULT>
 # type=int; method=queryAdd
 remora.nscalar = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA_DataStruct.H:733
+# source: Source/REMORA_DataStruct.H:753
 # type=Real; method=queryAdd
 remora.obcfac = <UNKNOWN_DEFAULT>
 
@@ -694,33 +702,53 @@ remora.omp_tile_size = 8 8 1024000
 # type=bool; method=queryAdd
 remora.output_forcing = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA.cpp:1835
+# source: Source/REMORA.cpp:2222
 # type=string; method=queryAdd
 remora.plot_file = plt
 
-# source: Source/REMORA.cpp:1836
+# source: Source/REMORA.cpp:2223
 # type=int; method=queryAdd
 remora.plot_int = 100
 
-# source: Source/REMORA.cpp:1837
+# source: Source/REMORA.cpp:2224
 # type=Real; method=queryAdd
 remora.plot_int_time = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA.cpp:1839
+# source: Source/REMORA.cpp:2226
 # type=bool; method=query
 remora.plot_nodal_data = true
 
-# source: Source/REMORA.cpp:1838
+# source: Source/REMORA.cpp:2225
 # type=bool; method=query
 remora.plot_staggered_vels = false
 
-# source: Source/REMORA.cpp:1746
+# source: Source/REMORA.cpp:2133
 # type=Real; method=query
 remora.plotfile_fill_value = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA.cpp:1842
+# source: Source/REMORA.cpp:2229
 # type=string; method=queryAdd
 remora.plotfile_type = amrex
+
+# source: Source/Prob/REMORA_InitAnalyticMasks_DogboneAnalytic.H:18
+# type=Real; method=query
+remora.prob.mask_x_hi = <UNKNOWN_DEFAULT>
+
+# source: Source/Prob/REMORA_InitAnalyticMasks_DogboneAnalytic.H:17
+# type=Real; method=query
+remora.prob.mask_x_lo = <UNKNOWN_DEFAULT>
+
+# source: Source/Prob/REMORA_InitAnalyticMasks_DogboneAnalytic.H:20
+# type=Real; method=query
+remora.prob.mask_y_hi = <UNKNOWN_DEFAULT>
+
+# source: Source/Prob/REMORA_InitAnalyticMasks_DogboneAnalytic.H:19
+# type=Real; method=query
+remora.prob.mask_y_lo = <UNKNOWN_DEFAULT>
+
+# Equal to the eastern value leaves temperature uniform, which a test needs if its exact solution is rest.
+# type=Real; method=query
+remora.prob.temp_west = <UNKNOWN_DEFAULT>
 
 # biology active and no dye, Tracer_comp is the first biology component, so testing nComp() would write the dye initial value into NO3.
 # type=bool; method=query
@@ -749,6 +777,10 @@ remora.prob.z0 = 0.1
 # Reference Height
 # type=Real; method=query
 remora.prob.zRef = 80.0e-3
+
+# Off leaves the free surface flat, which a test needs if its exact solution is rest.
+# type=bool; method=query
+remora.prob.zeta_bump = true
 
 # physical
 # type=Vector<Real>; method=queryarr
@@ -830,7 +862,7 @@ remora.refinement_indicators_.value_greater = <REQUIRED>
 # type=Real; method=getarr
 remora.refinement_indicators_.value_less = <REQUIRED>
 
-# source: Source/REMORA.cpp:1748
+# source: Source/REMORA.cpp:2135
 # type=string; method=queryAdd
 remora.restart = <UNKNOWN_DEFAULT>
 
@@ -854,7 +886,7 @@ remora.smflux_type = analytic
 # type=Real; method=queryAdd
 remora.start_time = <UNKNOWN_DEFAULT>
 
-# source: Source/REMORA.cpp:1850
+# source: Source/REMORA.cpp:2237
 # type=int; method=queryAdd
 remora.steps_per_history_file = <UNKNOWN_DEFAULT>
 
@@ -866,7 +898,7 @@ remora.stop_time = 30000.0
 # type=int; method=queryAdd
 remora.sum_interval = -1
 
-# source: Source/REMORA.cpp:1768
+# source: Source/REMORA.cpp:2155
 # type=Real; method=queryAdd
 remora.sum_period = <UNKNOWN_DEFAULT>
 
@@ -966,11 +998,11 @@ remora.vwind = <UNKNOWN_DEFAULT>
 # type=string; method=queryAdd
 remora.wind_type = analytic
 
-# source: Source/REMORA.cpp:1848
+# source: Source/REMORA.cpp:2235
 # type=bool; method=queryAdd
 remora.write_history_file = true
 
-# source: Source/REMORA_DataStruct.H:730
+# source: Source/REMORA_DataStruct.H:750
 # type=Real; method=queryAdd
 remora.znudg = <UNKNOWN_DEFAULT>
 
@@ -1405,7 +1437,7 @@ vismf.v = <UNKNOWN_DEFAULT>
 # type=bool; method=queryAdd
 amrex.abort_on_out_of_gpu_memory = false
 
-# source: Src/Base/AMReX.cpp:574
+# source: Src/Base/AMReX.cpp:575
 # type=unknown; method=queryAdd
 amrex.abort_on_unused_inputs = <UNKNOWN_DEFAULT>
 
@@ -1417,7 +1449,7 @@ amrex.async_out = false
 # type=int; method=queryAdd
 amrex.async_out_nfiles = 64
 
-# source: Src/Base/AMReX.cpp:573
+# source: Src/Base/AMReX.cpp:574
 # type=unknown; method=query
 amrex.call_addr2line = <UNKNOWN_DEFAULT>
 
@@ -1437,43 +1469,43 @@ amrex.fpe_trap_overflow = false
 # type=unknown; method=queryAdd
 amrex.fpe_trap_zero = <UNKNOWN_DEFAULT>
 
-# source: Src/Base/AMReX.cpp:590
+# source: Src/Base/AMReX.cpp:591
 # type=unknown; method=queryAdd
 amrex.handle_sigabrt = <UNKNOWN_DEFAULT>
 
-# source: Src/Base/AMReX.cpp:591
+# source: Src/Base/AMReX.cpp:592
 # type=unknown; method=queryAdd
 amrex.handle_sigfpe = <UNKNOWN_DEFAULT>
 
-# source: Src/Base/AMReX.cpp:592
+# source: Src/Base/AMReX.cpp:593
 # type=unknown; method=queryAdd
 amrex.handle_sigill = <UNKNOWN_DEFAULT>
 
-# source: Src/Base/AMReX.cpp:589
+# source: Src/Base/AMReX.cpp:590
 # type=unknown; method=queryAdd
 amrex.handle_sigint = <UNKNOWN_DEFAULT>
 
-# source: Src/Base/AMReX.cpp:587
+# source: Src/Base/AMReX.cpp:588
 # type=unknown; method=queryAdd
 amrex.handle_sigsegv = <UNKNOWN_DEFAULT>
 
-# source: Src/Base/AMReX.cpp:588
+# source: Src/Base/AMReX.cpp:589
 # type=unknown; method=queryAdd
 amrex.handle_sigterm = <UNKNOWN_DEFAULT>
 
-# source: Src/Base/AMReX.cpp:683
+# source: Src/Base/AMReX.cpp:684
 # type=bool; method=queryAdd
 amrex.hypre_spgemm_use_vendor = false
 
-# source: Src/Base/AMReX.cpp:684
+# source: Src/Base/AMReX.cpp:685
 # type=bool; method=queryAdd
 amrex.hypre_spmv_use_vendor = false
 
-# source: Src/Base/AMReX.cpp:685
+# source: Src/Base/AMReX.cpp:686
 # type=bool; method=queryAdd
 amrex.hypre_sptrans_use_vendor = false
 
-# source: Src/Base/AMReX.cpp:681
+# source: Src/Base/AMReX.cpp:682
 # type=bool; method=queryAdd
 amrex.init_hypre = true
 
@@ -1505,19 +1537,19 @@ amrex.parmparse.v = <UNKNOWN_DEFAULT>
 # type=int; method=queryAdd
 amrex.pout_int = 1
 
-# source: Src/Base/AMReX.cpp:570
+# source: Src/Base/AMReX.cpp:571
 # type=unknown; method=query
 amrex.regtest_reduction = <UNKNOWN_DEFAULT>
 
-# source: Src/Base/AMReX.cpp:571
+# source: Src/Base/AMReX.cpp:572
 # type=unknown; method=queryAdd
 amrex.signal_handling = <UNKNOWN_DEFAULT>
 
-# source: Src/Base/AMReX_ParallelDescriptor.cpp:1610
+# source: Src/Base/AMReX_ParallelDescriptor.cpp:1612
 # type=int; method=query
 amrex.team.reduce = 0
 
-# source: Src/Base/AMReX_ParallelDescriptor.cpp:1609
+# source: Src/Base/AMReX_ParallelDescriptor.cpp:1611
 # type=int; method=query
 amrex.team.size = 1
 
@@ -1585,11 +1617,11 @@ amrex.the_pinned_arena_init_size = 0
 # type=Long; method=queryAdd
 amrex.the_pinned_arena_release_threshold = <UNKNOWN_DEFAULT>
 
-# source: Src/Base/AMReX.cpp:572
+# source: Src/Base/AMReX.cpp:573
 # type=unknown; method=queryAdd
 amrex.throw_exception = <UNKNOWN_DEFAULT>
 
-# source: Src/Base/AMReX_ParallelDescriptor.cpp:1583
+# source: Src/Base/AMReX_ParallelDescriptor.cpp:1585
 # type=bool; method=queryAdd
 amrex.use_gpu_aware_mpi = false
 
@@ -1682,7 +1714,7 @@ device.v = 0
 #==============================================================================
 # TINY PROFILER PARAMETERS
 #==============================================================================
-# source: Src/Base/AMReX_TinyProfiler.cpp:324
+# source: Src/Base/AMReX_TinyProfiler.cpp:353
 # type=bool; method=queryAdd
 tiny_profiler.device_synchronize_around_region = false
 
@@ -1690,13 +1722,13 @@ tiny_profiler.device_synchronize_around_region = false
 # type=bool; method=queryAdd
 tiny_profiler.enabled = true
 
-# source: Src/Base/AMReX_TinyProfiler.cpp:355
+# source: Src/Base/AMReX_TinyProfiler.cpp:384
 # type=bool; method=queryAdd
 tiny_profiler.memprof_enabled = true
 
 # the timer and memory reports (both opened in append mode) coexist.
 # type=return; method=query
-tiny_profiler.output_file = <UNKNOWN_DEFAULT>
+tiny_profiler.output_file = stdout
 
 # Specify the maximum percentage of inclusive time that the "Other" section in the output can have (default 1%)
 # type=Real; method=queryAdd
@@ -1812,36 +1844,36 @@ blprofiler.prof_traceflushsize = <UNKNOWN_DEFAULT>
 #==============================================================================
 # DRIVER PARAMETERS
 #==============================================================================
-# source: Source/REMORA_DataStruct.H:245
+# source: Source/REMORA_DataStruct.H:250
 # type=string; method=query
 driver.atm2ocn_mode = state
 
 #==============================================================================
 # NUMBLOCKS PARAMETERS
 #==============================================================================
-# source: Src/Base/AMReX_GpuDevice.cpp:662
+# source: Src/Base/AMReX_GpuDevice.cpp:667
 # type=int; method=query
 numBlocks.x = 0
 
-# source: Src/Base/AMReX_GpuDevice.cpp:663
+# source: Src/Base/AMReX_GpuDevice.cpp:668
 # type=int; method=query
 numBlocks.y = 0
 
-# source: Src/Base/AMReX_GpuDevice.cpp:664
+# source: Src/Base/AMReX_GpuDevice.cpp:669
 # type=int; method=query
 numBlocks.z = 0
 
 #==============================================================================
 # NUMTHREADS PARAMETERS
 #==============================================================================
-# source: Src/Base/AMReX_GpuDevice.cpp:650
+# source: Src/Base/AMReX_GpuDevice.cpp:655
 # type=int; method=query
 numThreads.x = 0
 
-# source: Src/Base/AMReX_GpuDevice.cpp:651
+# source: Src/Base/AMReX_GpuDevice.cpp:656
 # type=int; method=query
 numThreads.y = 0
 
-# source: Src/Base/AMReX_GpuDevice.cpp:652
+# source: Src/Base/AMReX_GpuDevice.cpp:657
 # type=int; method=query
 numThreads.z = 0
