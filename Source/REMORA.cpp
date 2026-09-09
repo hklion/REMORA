@@ -637,7 +637,9 @@ void
 REMORA::Define_REMORAFillPatchers (int lev)
 {
     BL_PROFILE("REMORA::Define_REMORAFillPatchers()");
-    amrex::Print() << ":::Define_REMORAFillPatchers " << lev << std::endl;
+    if (verbose > 0) {
+        amrex::Print() << ":::Define_REMORAFillPatchers " << lev << std::endl;
+    }
 
     auto& ba_fine  = cons_new[lev  ]->boxArray();
     auto& ba_crse  = cons_new[lev-1]->boxArray();

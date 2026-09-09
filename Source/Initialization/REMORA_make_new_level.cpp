@@ -164,8 +164,6 @@ REMORA::MakeNewLevelFromCoarse (int lev, Real time, const BoxArray& ba,
 void
 REMORA::RemakeLevel (int lev, Real time, const BoxArray& ba, const DistributionMapping& dm)
 {
-    BoxArray            ba_old(cons_new[lev]->boxArray());
-    DistributionMapping dm_old(cons_new[lev]->DistributionMap());
 
     BoxList bl2d = ba.boxList();
     for (auto& b : bl2d) {
@@ -316,22 +314,14 @@ REMORA::RemakeLevel (int lev, Real time, const BoxArray& ba, const DistributionM
     }
 #endif
 
-    // We need to re-define the FillPatcher if the grids have changed
+    // Both of these hold this level's layout and the one below it, so both have to be rebuilt
+    // whenever either changes. Unconditionally: AmrCore::regrid calls RemakeLevel only when
+    // this level's BoxArray changed or the coarser one's did, and in the latter case it
+    // passes this level's own ba and dm unchanged -- so testing them here would skip exactly
+    // the case where only the coarse side moved.
     if (lev > 0 && cf_width >= 0) {
-        bool ba_changed = (ba != ba_old);
-        bool dm_changed = (dm != dm_old);
-        if (ba_changed || dm_changed) {
-          Define_REMORAFillPatchers(lev);
-          define_flux_register(lev);
-        }
-    }
-
-    // This level is the coarse side of the next one's flux register, which RemakeLevel will
-    // not rebuild for itself if its own grids come back unchanged.
-    if (ba != ba_old || dm != dm_old) {
-        if (lev+1 < int(advflux_reg.size()) && advflux_reg[lev+1]) {
-            define_flux_register(lev+1);
-        }
+        Define_REMORAFillPatchers(lev);
+        define_flux_register(lev);
     }
 
 #ifdef REMORA_USE_PARTICLES
