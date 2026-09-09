@@ -131,30 +131,40 @@ void REMORAPC::initializeParticlesUniformDistributionInBox (const std::unique_pt
     for(MFIter mfi = MakeMFIter(lev); mfi.isValid(); ++mfi) {
         const Box& tile_box  = mfi.tilebox();
 
-        int np = 0;
-        {
-            int ncell = num_particles[mfi].numPts();
-            const int* in = num_particles[mfi].dataPtr();
-            int* out = offsets[mfi].dataPtr();
-            np = Scan::PrefixSum<int>( ncell,
-                                       [=] AMREX_GPU_DEVICE (int i) -> int { return in[i]; },
-                                       [=] AMREX_GPU_DEVICE (int i, int const &x) { out[i] = x; },
-                                       Scan::Type::exclusive,
-                                       Scan::retSum );
-        }
-        auto offset_arr = offsets[mfi].array();
+        // Keep this loop per *tile*: the prefix sum, the offsets it writes, the resize
+        // and the fill must all describe tile_box. Grid-wide quantities here (scanning
+        // the whole num_particles fab, say) agree only while
+        // ParticleContainerBase::do_tiling is false; with tiling on they oversize every
+        // tile and race on the shared offsets fab.
+        const auto num_particles_arr = num_particles[mfi].const_array();
+        auto       offset_arr        = offsets[mfi].array();
+
+        // atOffset walks tile_box with i fastest, so with one tile per grid the scan
+        // sees exactly the fab's own layout.
+        const int np = Scan::PrefixSum<int>( static_cast<int>(tile_box.numPts()),
+                           [=] AMREX_GPU_DEVICE (int idx) -> int {
+                               return num_particles_arr(tile_box.atOffset(idx));
+                           },
+                           [=] AMREX_GPU_DEVICE (int idx, int const &x) {
+                               offset_arr(tile_box.atOffset(idx)) = x;
+                           },
+                           Scan::Type::exclusive,
+                           Scan::retSum );
 
         // already defined in the serial pass above
         auto& particle_tile = ParticlesAt(lev, mfi);
         particle_tile.resize(np);
+
+        // Nothing to place: a tile (or, with tiling off, a whole grid) can lie entirely
+        // outside particle_init_domain. Bail before taking &aos[0] on an empty tile.
+        if (np == 0) { continue; }
+
         auto aos = &particle_tile.GetArrayOfStructs()[0];
         auto& soa = particle_tile.GetStructOfArrays();
         auto* vx_ptr = soa.GetRealData(REMORAParticlesRealIdxSoA::vx).data();
         auto* vy_ptr = soa.GetRealData(REMORAParticlesRealIdxSoA::vy).data();
         auto* vz_ptr = soa.GetRealData(REMORAParticlesRealIdxSoA::vz).data();
         auto* mass_ptr = soa.GetRealData(REMORAParticlesRealIdxSoA::mass).data();
-
-        const auto num_particles_arr = num_particles[mfi].array();
 
         auto my_proc = ParallelDescriptor::MyProc();
         Long pid;
