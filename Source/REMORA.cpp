@@ -956,7 +956,7 @@ REMORA::coarsen_masks_with_grow_cells (int crse_lev)
         Real wet = zero;
         for (int jref = 0; jref < ratio[1]; ++jref) {
             for (int iref = 0; iref < ratio[0]; ++iref) {
-                wet += amrex::min(one, finema[box_no](ii+iref, jj+jref, k, n));
+                wet += amrex::min(Real(1.0), finema[box_no](ii+iref, jj+jref, k, n));
             }
         }
         crsema[box_no](i,j,k,n) = (wet > zero) ? one : zero;
@@ -1077,7 +1077,7 @@ REMORA::check_mask_consistency ()
                 Real wet_r = zero;
                 for (int jref = 0; jref < ry; ++jref) {
                     for (int iref = 0; iref < rx; ++iref) {
-                        wet_r += amrex::min(one, fr(ii+iref, jj+jref, k));
+                        wet_r += amrex::min(Real(1.0), fr(ii+iref, jj+jref, k));
                     }
                 }
 
@@ -1098,7 +1098,7 @@ REMORA::check_mask_consistency ()
 
                 Real wet_u = zero;
                 for (int jref = 0; jref < ry; ++jref) {
-                    wet_u += amrex::min(one, fu(ii, jj+jref, k));
+                    wet_u += amrex::min(Real(1.0), fu(ii, jj+jref, k));
                 }
 
                 const bool missed = cu(i,j,k) < zero;
@@ -1117,7 +1117,7 @@ REMORA::check_mask_consistency ()
 
                 Real wet_v = zero;
                 for (int iref = 0; iref < rx; ++iref) {
-                    wet_v += amrex::min(one, fv(ii+iref, jj, k));
+                    wet_v += amrex::min(Real(1.0), fv(ii+iref, jj, k));
                 }
 
                 const bool missed = cv(i,j,k) < zero;
@@ -1216,7 +1216,7 @@ REMORA::coarsen_bathymetry_with_grow_cells (int crse_lev)
         for (int jref = 0; jref < ratio[1]; ++jref) {
             for (int iref = 0; iref < ratio[0]; ++iref) {
                 const Real hf = finema[box_no](ii+iref, jj+jref, k, n);
-                const Real m = amrex::min(one, fmskma[box_no](ii+iref, jj+jref, k));
+                const Real m = amrex::min(Real(1.0), fmskma[box_no](ii+iref, jj+jref, k));
                 num += hf * m;
                 den += m;
                 sum_all += hf;

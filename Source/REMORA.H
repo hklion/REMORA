@@ -1351,6 +1351,11 @@ public:
     void average_down_with_grow_cells(int lev, amrex::Vector<std::unique_ptr<amrex::MultiFab>>& mf,
                                       bool use_mask = false);
 
+    /** \brief Average one field down a level, weighted by the land/sea mask. */
+    void average_down_masked (int crse_lev, const amrex::MultiFab& S_fine,
+                              amrex::MultiFab& S_crse, const amrex::MultiFab& msk_fine,
+                              const amrex::MultiFab& cmsk, int ncomp, int face_dir);
+
     int xvel_bc () const noexcept { return BCVars::xvel_bc(ncons); }
     int yvel_bc () const noexcept { return BCVars::yvel_bc(ncons); }
     int zvel_bc () const noexcept { return BCVars::zvel_bc(ncons); }
@@ -1423,11 +1428,6 @@ private:
 
     /** \brief more flexible version of AverageDown() that lets you average down across multiple levels */
     void AverageDownTo (int crse_lev);
-
-    /** \brief Average one field down a level, weighted by the land/sea mask */
-    void average_down_masked (int crse_lev, const amrex::MultiFab& S_fine,
-                              amrex::MultiFab& S_crse, const amrex::MultiFab& msk_fine,
-                              const amrex::MultiFab& cmsk, int ncomp, int face_dir);
 
     /** \brief Construct FillPatchers */
     void Construct_REMORAFillPatchers (int lev);
