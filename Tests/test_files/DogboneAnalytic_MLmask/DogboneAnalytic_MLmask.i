@@ -3,9 +3,10 @@
 #
 # Two things have to line up for one to exist. hires_grid_level resolves the coastline on the
 # refined level instead of injecting it from level 0; and a static box puts refined grids over
-# the coast, which velocity-tagged refinement never does, since masked cells and the land-sea
-# boundary are untagged. Offsetting mask_y_lo/mask_y_hi by one fine cell off a coarse face then
-# leaves coarse rows 5 and 9 covered by blocks that are 6 water cells out of 9.
+# the coast. The box is static because this case is at rest, so a field-based indicator like
+# DogboneAnalytic_MLvel's x_velocity > 0.05 would tag nothing anywhere. Offsetting
+# mask_y_lo/mask_y_hi by one fine cell off a coarse face then leaves coarse rows 5 and 9
+# covered by blocks that are 6 water cells out of 9.
 #
 # The exact solution is rest: flat bathymetry and free surface, uniform temperature and
 # salinity, no initial velocity, no Coriolis. So plt00010 must equal plt00000, with no gold
