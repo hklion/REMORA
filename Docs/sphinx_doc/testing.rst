@@ -137,21 +137,17 @@ condition with no time stepper in the way.
 Unit tests
 ~~~~~~~~~~
 
-Everything above drives the full executable. A header of pure functions is better checked directly, and
-those tests live in ``Tests/Unit``, built as ``remora_unit_tests`` and labelled ``unit``, so
-``ctest -L unit`` runs them alone in under a second and ``ctest -LE unit`` skips them.
+Unit tests that exercise individual functions live in ``Tests/Unit``, built as ``remora_unit_tests`` and
+labelled ``unit`` so ``ctest -L unit`` runs them alone and ``ctest -LE unit`` skips them.
 
 There is no framework: a unit test is a ``main()`` that checks answers, prints a line per failure, and
-returns nonzero -- the contract ``ctest`` already uses for every other lane. To add one, drop a ``.cpp``
+returns nonzero. To add one, add a ``.cpp``
 beside the existing test and list it in ``Tests/Unit/CMakeLists.txt``. The target links AMReX, so a test
 sees the same precision as the build around it; a case that only holds in double has to be gated on that
 rather than assumed.
 
-Take expected values from *outside* the implementation, or the test only records what the code did the day
-it was written -- a gold file's weakness. ``REMORA_DateClock_test.cpp`` is the worked example: Matlab
-``datenum`` values, the anchors ROMS ``dateclock.F`` states in its own comments, Gregorian arithmetic for
-days of the year. Better still, assert a property: that ``datevec`` inverts ``datenum`` needs no outside
-authority and covers far more inputs than a table.
+The unit test ``REMORA_DateClock_test.cpp`` tests that the date and calendar functions in
+``REMORA_DateClock.H`` match ROMS's ``dateclock.F``.
 
 Regenerating gold files
 ~~~~~~~~~~~~~~~~~~~~~~~
