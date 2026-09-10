@@ -38,12 +38,9 @@
  * -- and in the `time_ref = -2` conversion it does, which rounds differently
  * from `INT` on the negative side of the epoch -- `std::floor` is used here.
  *
- * remora_caldate does not return hours, minutes or seconds. ROMS derives them
- * from the day fraction through the tolerant rounding helper in `round_mod`,
- * and half-porting that would be worse than leaving it out; the day fraction is
- * available from remora_caldate's `yday` for a caller that needs it. The
- * reference date does carry a time of day -- `remora.time_ref` can name one --
- * and remora_ref_clock returns it.
+ * The day fraction is available from remora_caldate's `yday` for a caller that
+ * needs it. The reference date does carry a time of day -- `remora.time_ref`
+ * can name one -- and remora_ref_clock returns it.
  *
  * Two quirks of the `time_ref = -2` calendar carry over, both ROMS's and both
  * confirmed against the Fortran rather than inferred:
