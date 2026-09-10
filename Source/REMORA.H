@@ -307,9 +307,6 @@ public:
     /** \brief Copy maskr to all z levels */
     void fill_3d_masks (int lev);
 
-    /** \brief Set psi-point mask to be consistent with rho-point mask */
-    void update_mskp (int lev);
-
     /** \brief compute dt from CFL considerations */
     amrex::Real estTimeStep (int lev) const;
 
@@ -407,6 +404,11 @@ public:
 
     /** \brief Bathymetry data on the whole domain at each potential level **/
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_h_full_domain;
+
+    /** \brief Land/sea mask at cell centers on the whole domain at each potential level.
+     * Specified at hires_grid_level and coarsened down from there, so that a refined
+     * coastline and the bathymetry it goes with come from the same grid. **/
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_mskr_full_domain;
 
     /** \brief Width of cells in the vertical (z-) direction (3D, Hz in ROMS) */
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_Hz;
@@ -563,6 +565,14 @@ public:
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_mskp;
     /** \brief land/sea mask at cell centers, copied to all z levels (3D) */
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_mskr3d;
+
+    /** \brief the level's rho-, u- and v-masks copied onto the layout of the level above it
+     * coarsened, which is the layout the two-way average-down computes on. Indexed by the
+     * coarse level of the pair. Built on demand and reused until a regrid, since the masks
+     * are a function of position alone and so do not change between them. **/
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_mskr_crse_on_fine;
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_msku_crse_on_fine;
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_mskv_crse_on_fine;
 
     /** \brief horizontal scaling factor: 1 / dx (2D) */
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> vec_pm;
@@ -1111,6 +1121,39 @@ public:
     /** \brief Initialize land-sea masks from file or analytic */
     void set_masks (int lev);
 
+    /** \brief Copy this level's land-sea mask out of the full-domain mask that was coarsened
+     * down from hires_grid_level */
+    void set_masks_averaged_down (int lev);
+
+    /** \brief Coarsen the full-domain rho-mask from crse_lev+1 onto crse_lev, grow cells
+     * included, by the rule that a coarse cell is land only if all its fine cells are land */
+    void coarsen_masks_with_grow_cells (int crse_lev);
+
+    /** \brief Coarsen the full-domain bathymetry from crse_lev+1 onto crse_lev, grow cells
+     * included, weighted by the land/sea mask */
+    void coarsen_bathymetry_with_grow_cells (int crse_lev);
+
+    /** \brief Inject the full-domain rho-mask from fine_lev-1 onto fine_lev, piecewise
+     * constant, grow cells included */
+    void refine_masks_with_grow_cells (int fine_lev);
+
+    /** \brief Make sure the full-domain rho-mask exists on levels 0 through top_lev */
+    void ensure_full_domain_masks (int top_lev);
+
+    /** \brief Rebuild the u-, v- and psi-point masks from vec_mskr and fill their ghosts */
+    void update_nodal_masks (int lev);
+
+    /** \brief Make sure the coarse masks the average-down kernels read sit on the coarsened
+     * layout of level crse_lev+1, rebuilding them if a regrid has moved it */
+    void update_avgdown_masks (int crse_lev);
+
+    /** \brief Drop the cached average-down masks of every level pair that involves lev */
+    void clear_avgdown_masks (int lev);
+
+    /** \brief Check every level pair's masks against each other, and every level's mask
+     * values, reporting according to remora.mask_consistency */
+    void check_mask_consistency ();
+
     /** \brief Calculate vertical stretched coordinates */
     void stretch_transform (int lev);
 
@@ -1242,6 +1285,9 @@ public:
     /** \brief Full domain bathymetry data initialization from analytic */
     void init_bathymetry_full_domain_from_analytic ();
 
+    /** \brief Full domain land-sea mask initialization from analytic */
+    void init_masks_full_domain_from_analytic ();
+
     /** \brief Problem initialization from averaged-down high resolution data */
     void set_init_data_averaged_down (int lev);
     /** \brief Problem initialization from NetCDF file */
@@ -1271,6 +1317,8 @@ public:
     void init_bdry_from_netcdf (int lev);
     /** \brief Mask data initialization from NetCDF file */
     void init_masks_from_netcdf (int lev);
+    /** \brief Full domain high-res mask data initialization from NetCDF file */
+    void init_masks_full_domain_from_netcdf ();
     /** \brief Bathymetry data initialization from NetCDF file */
     void init_bathymetry_from_netcdf (int lev);
     /** \brief Full domain high-res bathymetry data initialization from NetCDF file */
@@ -1308,7 +1356,13 @@ public:
     void mask_arrays_for_write (int lev, amrex::Real fill_value, amrex::Real fill_where);
 
     /** \brief Average down from level lev+1 to lev in mf, including grow cells */
-    void average_down_with_grow_cells(int lev, amrex::Vector<std::unique_ptr<amrex::MultiFab>>& mf);
+    void average_down_with_grow_cells(int lev, amrex::Vector<std::unique_ptr<amrex::MultiFab>>& mf,
+                                      bool use_mask = false);
+
+    /** \brief Average one field down a level, weighted by the land/sea mask. */
+    void average_down_masked (int crse_lev, const amrex::MultiFab& S_fine,
+                              amrex::MultiFab& S_crse, const amrex::MultiFab& msk_fine,
+                              const amrex::MultiFab& cmsk, int ncomp, int face_dir);
 
     int xvel_bc () const noexcept { return BCVars::xvel_bc(ncons); }
     int yvel_bc () const noexcept { return BCVars::yvel_bc(ncons); }
@@ -1821,6 +1875,9 @@ private:
 
     /** \brief Set refinement criteria */
     void refinement_criteria_setup();
+
+    /** \brief Reject vertical refinement and accumulate the refinement ratios */
+    void init_ref_ratios ();
 
     /** \brief Holds info for dynamically generated tagging criteria */
     static amrex::Vector<amrex::AMRErrorTag> ref_tags;

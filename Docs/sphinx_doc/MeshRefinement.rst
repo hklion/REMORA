@@ -171,6 +171,9 @@ Masked Regions and Tagging
 Masked cells and the land-sea boundary are untagged for refinement even if they otherwise meet
 refinement criteria. They may still be refined, but they will not be forced to be refined.
 
+How the mask itself is carried across levels, and how it weights the two-way average, is described
+in :ref:`Land/Sea Masking <sec:masking>`.
+
 Coupling Types
 --------------
 

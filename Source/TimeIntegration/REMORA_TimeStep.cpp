@@ -28,6 +28,9 @@ REMORA::timeStep (int lev, Real time, int iteration)
                 int old_finest = finest_level;
                 regrid(lev, time);
 
+                // The refined footprint moved, so the level pairs are new
+                check_mask_consistency();
+
 #ifdef REMORA_USE_PARTICLES
                 if (finest_level != old_finest) {
                     particleData.Redistribute();

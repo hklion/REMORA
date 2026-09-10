@@ -50,9 +50,9 @@ public:
 
     void init_analytic_masks(
         int lev,
-        const amrex::Geometry& /*geom*/,
+        const amrex::Geometry& geom,
         SolverChoice const& /*m_solverChoice*/,
-        REMORA const& remora,
+        REMORA const& /*remora*/,
         amrex::MultiFab& mf_mskr) override;
 
     void init_analytic_smflux(

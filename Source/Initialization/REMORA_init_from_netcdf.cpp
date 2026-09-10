@@ -55,11 +55,10 @@ void
 check_hires_dims_from_netcdf (const std::string& fname, const std::string& var_name,
                               const Box& domain, const IntVect& ngrow);
 
-/** \brief helper function for reading in land-sea masks from netcdf */
+/** \brief helper function for reading in the rho-point land-sea mask from netcdf */
 void
 read_masks_from_netcdf (int /*lev*/, const Box& domain, const std::string& fname,
-                       FArrayBox& NC_mskr_fab, FArrayBox& NC_msku_fab,
-                       FArrayBox& NC_mskv_fab);
+                       FArrayBox& NC_mskr_fab);
 
 /** \brief helper function to initialize state from netcdf */
 void
@@ -111,6 +110,11 @@ void
 read_grid_vars_full_domain_from_netcdf (const Box& domain, const std::string& fname,
                                          FArrayBox& NC_pm_fab, FArrayBox& NC_pn_fab,
                                          IntVect ngrow);
+
+/** \brief helper function to read full-domain high resolution land/sea mask from netcdf */
+void
+read_masks_full_domain_from_netcdf (const Box& domain, const std::string& fname,
+                                    FArrayBox& NC_mskr_fab, IntVect ngrow);
 
 /** \brief helper function to read coriolis factor from netcdf */
 void
@@ -343,9 +347,9 @@ REMORA::init_data_full_domain_from_netcdf ()
     // Average down to fill levels below hires_grid_level. Use a special average_down so
     // grow cells get populated by averaged down fine data
     for (int lev=hires_init_level-1; lev >= 0; lev--) {
-        average_down_with_grow_cells(lev, vec_cons_full_domain);
-        average_down_with_grow_cells(lev, vec_xvel_full_domain);
-        average_down_with_grow_cells(lev, vec_yvel_full_domain);
+        average_down_with_grow_cells(lev, vec_cons_full_domain, true);
+        average_down_with_grow_cells(lev, vec_xvel_full_domain, true);
+        average_down_with_grow_cells(lev, vec_yvel_full_domain, true);
     }
 }
 
@@ -514,7 +518,7 @@ REMORA::init_zeta_full_domain_from_netcdf ()
     // Average down to fill levels below hires_grid_level. Use a special average_down so
     // grow cells get populated by averaged down fine data
     for (int lev=hires_init_level-1; lev >= 0; lev--) {
-        average_down_with_grow_cells(lev, vec_zeta_full_domain);
+        average_down_with_grow_cells(lev, vec_zeta_full_domain, true);
     }
 }
 
@@ -748,14 +752,11 @@ REMORA::init_masks_from_netcdf (int lev)
 {
     // *** FArrayBox's at this level for holding the INITIAL data
     Vector<FArrayBox> NC_mskr_fab     ; NC_mskr_fab.resize(num_boxes_at_level[lev]);
-    Vector<FArrayBox> NC_msku_fab     ; NC_msku_fab.resize(num_boxes_at_level[lev]);
-    Vector<FArrayBox> NC_mskv_fab     ; NC_mskv_fab.resize(num_boxes_at_level[lev]);
 
     for (int idx = 0; idx < num_boxes_at_level[lev]; idx++)
     {
         read_masks_from_netcdf(lev,boxes_at_level[lev][idx], nc_grid_file[lev][idx],
-                                    NC_mskr_fab[idx],NC_msku_fab[idx],
-                                    NC_mskv_fab[idx]);
+                                    NC_mskr_fab[idx]);
 
 #ifdef _OPENMP
 #pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
@@ -765,8 +766,6 @@ REMORA::init_masks_from_netcdf (int lev)
         for ( MFIter mfi(*cons_new[lev], false); mfi.isValid(); ++mfi )
         {
             FArrayBox &mskr_fab  = (*vec_mskr[lev])[mfi];
-            FArrayBox &msku_fab  = (*vec_msku[lev])[mfi];
-            FArrayBox &mskv_fab  = (*vec_mskv[lev])[mfi];
 
             //
             // FArrayBox to FArrayBox copy does "copy on intersection"
@@ -774,17 +773,13 @@ REMORA::init_masks_from_netcdf (int lev)
             //
 
             mskr_fab.template    copy<RunOn::Device>(NC_mskr_fab[idx]);
-            msku_fab.template    copy<RunOn::Device>(NC_msku_fab[idx]);
-            mskv_fab.template    copy<RunOn::Device>(NC_mskv_fab[idx]);
         } // mf
         } // omp
     } // idx
 
-    update_mskp(lev);
+    // Ghosts first: update_nodal_masks reaches mskr(i-1,j-1).
     vec_mskr[lev]->FillBoundary(geom[lev].periodicity());
-    vec_msku[lev]->FillBoundary(geom[lev].periodicity());
-    vec_mskv[lev]->FillBoundary(geom[lev].periodicity());
-    vec_mskp[lev]->FillBoundary(geom[lev].periodicity());
+    update_nodal_masks(lev);
 }
 
 /**
@@ -1135,10 +1130,37 @@ REMORA::init_bathymetry_full_domain_from_netcdf ()
         h_fab.template    copy<RunOn::Device>(NC_h_fab[0]);
     }
 
-    // Average down to fill levels below hires_grid_level. Use a special average_down so
-    // grow cells get populated by averaged down fine data
+    // Coarsen to fill levels below hires_grid_level, grow cells included. Mask-weighted, so a
+    // coarse cell only partly covered by water takes the depth of that water.
     for (int lev=hires_grid_level-1; lev >= 0; lev--) {
-        average_down_with_grow_cells(lev, vec_h_full_domain);;
+        coarsen_bathymetry_with_grow_cells(lev);
+    }
+}
+
+void
+REMORA::init_masks_full_domain_from_netcdf ()
+{
+    if (nc_grid_file_hires.empty()) {
+        Abort("Must specify high-resolution grid file when remora.mask_type = netcdf and hires_grid_level > 0");
+    }
+    check_hires_dims_from_netcdf(nc_grid_file_hires, "mask_rho", nc_hires_grid_box,
+                                 cum_ref_ratios[hires_grid_level]);
+
+    Vector<FArrayBox> NC_mskr_fab   ; NC_mskr_fab.resize(1);
+    read_masks_full_domain_from_netcdf(nc_hires_grid_box, nc_grid_file_hires, NC_mskr_fab[0],
+                                       cum_ref_ratios[hires_grid_level]);
+
+    // Don't tile this since we are operating on full FABs in this routine
+    for ( MFIter mfi(*vec_mskr_full_domain[hires_grid_level], false); mfi.isValid(); ++mfi )
+    {
+        FArrayBox &mskr_fab  = (*vec_mskr_full_domain[hires_grid_level])[mfi];
+        mskr_fab.template    copy<RunOn::Device>(NC_mskr_fab[0]);
+    }
+
+    // Coarsen to fill the levels below hires_grid_level. Not average_down_with_grow_cells:
+    // a mask has to stay exactly 0 or 1, so this takes "wet if any fine cell is wet".
+    for (int lev=hires_grid_level-1; lev >= 0; lev--) {
+        coarsen_masks_with_grow_cells(lev);
     }
 }
 

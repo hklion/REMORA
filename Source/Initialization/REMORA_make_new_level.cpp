@@ -85,6 +85,12 @@ REMORA::MakeNewLevelFromCoarse (int lev, Real time, const BoxArray& ba,
     vec_vbar[lev]->setVal(zero);
 
 
+    // Before the fills: FillPatch masks domain-boundary ghosts through physbcs, so these must
+    // hold the real coastline rather than init_masks' all-water placeholder. Order matters:
+    // init_stuff reallocates the coordinates set_grid_scale fills, which set_masks may read.
+    set_grid_scale(lev);
+    set_masks(lev);
+
     FillCoarsePatch(lev, time, cons_new[lev], cons_new[lev-1],BCVars::Temp_bc_comp,BdyVars::t);
     FillCoarsePatch(lev, time, xvel_new[lev], xvel_new[lev-1], xvel_bc(), BdyVars::u);
     FillCoarsePatch(lev, time, yvel_new[lev], yvel_new[lev-1], yvel_bc(), BdyVars::v);
@@ -117,14 +123,6 @@ REMORA::MakeNewLevelFromCoarse (int lev, Real time, const BoxArray& ba,
                 BdyVars::null,icomp,false);
     }
 
-    // Not totally sure foextrap is right here
-    FillCoarsePatchPC(lev, time, vec_mskr[lev].get(), vec_mskr[lev-1].get(),
-            foextrap_bc());
-
-    calculate_nodal_masks(lev);
-
-
-    set_grid_scale(lev);
     stretch_transform(lev);
 
     init_set_vmix(lev);
@@ -238,6 +236,11 @@ REMORA::RemakeLevel (int lev, Real time, const BoxArray& ba, const DistributionM
     tmp_vbar_new.setVal(zero);
 
 
+    // As in MakeNewLevelFromCoarse. init_stuff comes along because set_grid_scale follows it.
+    init_stuff(lev, ba, dm);
+    set_grid_scale(lev);
+    set_masks(lev);
+
     // This will fill the temporary MultiFabs with data from previous fine data as well as coarse where needed
     FillPatch(lev, time, tmp_cons_new, cons_new, BCVars::cons_bc, BdyVars::t,0,true,false);
     FillPatch(lev, time, tmp_xvel_new, xvel_new, xvel_bc(), BdyVars::u,0,true,false,0,0,zero,tmp_xvel_new);
@@ -297,14 +300,6 @@ REMORA::RemakeLevel (int lev, Real time, const BoxArray& ba, const DistributionM
     t_new[lev] = time;
     t_old[lev] = time - bogus_large_value;
 
-    init_masks(lev, ba, dm);
-    FillCoarsePatchPC(lev, time, vec_mskr[lev].get(), vec_mskr[lev-1].get(),
-            foextrap_bc());
-    calculate_nodal_masks(lev);
-
-    init_stuff(lev, ba, dm);
-
-    set_grid_scale(lev);
     stretch_transform(lev);
 
     init_set_vmix(lev);
@@ -421,6 +416,9 @@ void REMORA::resize_stuff(int lev)
     vec_z_phys_nd.resize(lev+1);
 
     vec_h_full_domain.resize(hires_grid_level+1);
+    // Sized for both hires knobs: the initial-state cascade needs a mask at
+    // hires_init_level, which may sit above hires_grid_level.
+    vec_mskr_full_domain.resize(std::max(hires_grid_level, hires_init_level)+1);
 
     vec_h.resize(lev+1);
     vec_Zt_avg1.resize(lev+1);
@@ -484,6 +482,11 @@ void REMORA::resize_stuff(int lev)
     vec_mskv.resize(lev+1);
     vec_mskp.resize(lev+1);
     vec_mskr3d.resize(lev+1);
+    // Indexed by the coarse level of a pair, so lev entries would do; sized like the rest to
+    // keep the indexing uniform.
+    vec_mskr_crse_on_fine.resize(lev+1);
+    vec_msku_crse_on_fine.resize(lev+1);
+    vec_mskv_crse_on_fine.resize(lev+1);
     vec_sstore.resize(lev+1);
 
     vec_cons_full_domain.resize(hires_init_level+1);
@@ -976,49 +979,6 @@ REMORA::set_zeta_to_Ztavg (int lev, bool apply_eminusp)
     }
 }
 
-/**
- * @param[in   ] lev    level to operate on
- */
-void
-REMORA::update_mskp (int lev)
-{
-    for ( MFIter mfi(*vec_mskr[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi )
-    {
-        Array4<const Real> const& mskr = vec_mskr[lev]->const_array(mfi);
-        Array4<      Real> const& mskp = vec_mskp[lev]->array(mfi);
-
-        Box bx = mfi.tilebox(); bx.grow(IntVect(1,1,0)); bx.makeSlab(2,0);
-
-        Real cff1 = one;
-        Real cff2 = two;
-
-        ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int)
-        {
-            if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
-                mskp(i,j,0) = one;
-            } else if ((mskr(i-1,j,0) < Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
-                mskp(i,j,0) = cff1;
-            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) < Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
-                mskp(i,j,0) = cff1;
-            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) < Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
-                mskp(i,j,0) = cff1;
-            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) < Real(0.5))) {
-                mskp(i,j,0) = cff1;
-            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) < Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) < Real(0.5))) {
-                mskp(i,j,0) = cff2;
-            } else if ((mskr(i-1,j,0) < Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) < Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
-                mskp(i,j,0) = cff2;
-            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) < Real(0.5)) and (mskr(i,j-1,0) < Real(0.5))) {
-                mskp(i,j,0) = cff2;
-            } else if ((mskr(i-1,j,0) < Real(0.5)) and (mskr(i,j,0) < Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
-                mskp(i,j,0) = cff2;
-            } else {
-                mskp(i,j,0) = zero;
-            }
-
-        });
-    }
-}
 
 /**
  * @param[in   ] lev    level to operate on
@@ -1033,15 +993,54 @@ REMORA::calculate_nodal_masks (int lev)
         Array4<      Real> const& mskv = vec_mskv[lev]->array(mfi);
         Array4<      Real> const& mskp = vec_mskp[lev]->array(mfi);
 
-        Box bx = mfi.tilebox(); bx.grow(IntVect(1,1,0)); bx.makeSlab(2,0);
+        // NGROW rings, not one: the stencil reaches mskr(i-1,j-1), and mskr carries NGROW+1.
+        Box bx = mfi.tilebox(); bx.grow(IntVect(NGROW,NGROW,0)); bx.makeSlab(2,0);
 
         ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int)
         {
             msku(i,j,0) = mskr(i-1,j  ,0) * mskr(i,j,0);
             mskv(i,j,0) = mskr(i  ,j-1,0) * mskr(i,j,0);
-            mskp(i,j,0) = mskr(i-1,j-1,0) * mskr(i,j,0) * mskr(i-1,j,0) * mskr(i,j-1,0);
+            // mskp is 2 along a straight land-sea boundary
+            if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
+                mskp(i,j,0) = one;
+            } else if ((mskr(i-1,j,0) < Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
+                mskp(i,j,0) = one;
+            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) < Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
+                mskp(i,j,0) = one;
+            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) < Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
+                mskp(i,j,0) = one;
+            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) < Real(0.5))) {
+                mskp(i,j,0) = one;
+            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) < Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) < Real(0.5))) {
+                mskp(i,j,0) = two;
+            } else if ((mskr(i-1,j,0) < Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) < Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
+                mskp(i,j,0) = two;
+            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) < Real(0.5)) and (mskr(i,j-1,0) < Real(0.5))) {
+                mskp(i,j,0) = two;
+            } else if ((mskr(i-1,j,0) < Real(0.5)) and (mskr(i,j,0) < Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
+                mskp(i,j,0) = two;
+            } else {
+                mskp(i,j,0) = zero;
+            }
         });
     }
+}
+
+/**
+ * Rebuild the u-, v- and psi-point masks from vec_mskr and fill their ghost cells.
+ *
+ * Every path goes through here, so the levels cannot end up with different definitions.
+ *
+ * @param[in   ] lev    level to operate on
+ */
+void
+REMORA::update_nodal_masks (int lev)
+{
+    calculate_nodal_masks(lev);
+
+    vec_msku[lev]->FillBoundary(geom[lev].periodicity());
+    vec_mskv[lev]->FillBoundary(geom[lev].periodicity());
+    vec_mskp[lev]->FillBoundary(geom[lev].periodicity());
 }
 
 /**
@@ -1055,7 +1054,8 @@ REMORA::fill_3d_masks (int lev)
         Array4<const Real> const& mskr = vec_mskr[lev]->const_array(mfi);
         Array4<      Real> const& mskr3d = vec_mskr3d[lev]->array(mfi);
 
-        Box bx = mfi.tilebox(); bx.grow(IntVect(1,1,0));
+        // No stencil, so this can fill every ring mskr has.
+        Box bx = mfi.tilebox(); bx.grow(IntVect(NGROW+1,NGROW+1,0));
 
         ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k)
         {

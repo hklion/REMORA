@@ -101,7 +101,7 @@ REMORA::init_biology_ic_full_domain ()
     // nothing else, so every level below it -- including level 0, the one the run actually
     // integrates -- kept the zeros that init_data_full_domain_from_netcdf had written.
     for (int lev = hires_init_level-1; lev >= 0; lev--) {
-        average_down_with_grow_cells(lev, vec_cons_full_domain);
+        average_down_with_grow_cells(lev, vec_cons_full_domain, true);
     }
 }
 
@@ -327,10 +327,12 @@ void REMORA::allocate_bathymetry_grid_vars_full_domain () {
     vec_h_full_domain[0].reset(new MultiFab(ba, dm, 1, IntVect(1,1,0)));
     vec_pm_full_domain[0].reset(new MultiFab(ba, dm, 1, IntVect(1,1,0)));
     vec_pn_full_domain[0].reset(new MultiFab(ba, dm, 1, IntVect(1,1,0)));
+    vec_mskr_full_domain[0].reset(new MultiFab(ba, dm, 1, IntVect(1,1,0)));
 
     auto h_growvect = vec_h[0]->nGrowVect();
     auto pm_growvect = vec_pm[0]->nGrowVect();
     auto pn_growvect = vec_pn[0]->nGrowVect();
+    auto mskr_growvect = vec_mskr[0]->nGrowVect();
     for (int lev=1; lev <= hires_grid_level; lev++) {
         ba = ba.refine(refRatio(lev-1));
         refined_domain.refine(refRatio(lev-1));
@@ -340,6 +342,7 @@ void REMORA::allocate_bathymetry_grid_vars_full_domain () {
         vec_h_full_domain[lev].reset(new MultiFab(ba, dm, 1, max(cum_ref_ratios[lev],h_growvect)));
         vec_pm_full_domain[lev].reset(new MultiFab(ba, dm, 1, max(cum_ref_ratios[lev],pm_growvect)));
         vec_pn_full_domain[lev].reset(new MultiFab(ba, dm, 1, max(cum_ref_ratios[lev],pn_growvect)));
+        vec_mskr_full_domain[lev].reset(new MultiFab(ba, dm, 1, max(cum_ref_ratios[lev],mskr_growvect)));
     }
     // A NetCDF read covers only as many grow cells as the file carries, and the analytic
     // bathymetry hook fills h alone, so parts of these arrays can reach the average-down
@@ -348,6 +351,9 @@ void REMORA::allocate_bathymetry_grid_vars_full_domain () {
         vec_h_full_domain[lev]->setVal(0.0);
         vec_pm_full_domain[lev]->setVal(0.0);
         vec_pn_full_domain[lev]->setVal(0.0);
+        // Water, not zero: the mask readers and the analytic hook only ever write land, so
+        // anything they miss has to default the way the per-level masks do in init_masks.
+        vec_mskr_full_domain[lev]->setVal(1.0);
     }
     nc_hires_grid_box = refined_domain;
 }
@@ -357,10 +363,25 @@ REMORA::init_bathymetry_full_domain_from_analytic ()
 {
     // init_analytic_bathymetry needs to be able to handle the full number of grow cells that vec_h_full_domain has
     prob->init_analytic_bathymetry(hires_grid_level, Geom(hires_grid_level), solverChoice, *this, *vec_h_full_domain[hires_grid_level]);
-    // Average down to fill levels below hires_grid_level. Use a special average_down so grow cells
-    // get populated by averaged down fine data
+    // Coarsen to fill levels below hires_grid_level, grow cells included. Mask-weighted, so a
+    // coarse cell only partly covered by water takes the depth of that water.
     for (int lev=hires_grid_level-1; lev >= 0; lev--) {
-        average_down_with_grow_cells(lev, vec_h_full_domain);
+        coarsen_bathymetry_with_grow_cells(lev);
+    }
+}
+
+void
+REMORA::init_masks_full_domain_from_analytic ()
+{
+    // init_analytic_masks has to be able to handle the full number of grow cells that
+    // vec_mskr_full_domain has, and cannot reach for the per-level coordinate arrays, since
+    // this MultiFab is not on grids[hires_grid_level].
+    prob->init_analytic_masks(hires_grid_level, Geom(hires_grid_level), solverChoice, *this,
+                              *vec_mskr_full_domain[hires_grid_level]);
+    // Coarsen to fill the levels below hires_grid_level. Not average_down_with_grow_cells:
+    // a mask has to stay exactly 0 or 1, so this takes "wet if any fine cell is wet".
+    for (int lev=hires_grid_level-1; lev >= 0; lev--) {
+        coarsen_masks_with_grow_cells(lev);
     }
 }
 
@@ -417,9 +438,9 @@ REMORA::init_full_domain_from_analytic ()
     init_biology_ic_full_domain();
 
     for (int lev=hires_init_level-1; lev >= 0; lev--) {
-        average_down_with_grow_cells(lev, vec_cons_full_domain);
-        average_down_with_grow_cells(lev, vec_xvel_full_domain);
-        average_down_with_grow_cells(lev, vec_yvel_full_domain);
+        average_down_with_grow_cells(lev, vec_cons_full_domain, true);
+        average_down_with_grow_cells(lev, vec_xvel_full_domain, true);
+        average_down_with_grow_cells(lev, vec_yvel_full_domain, true);
     }
 }
 
@@ -429,6 +450,6 @@ REMORA::init_full_domain_zeta_from_analytic ()
     prob->init_analytic_zeta(hires_init_level, geom[hires_init_level], solverChoice, *this, *vec_zeta_full_domain[hires_init_level]);
 
     for (int lev=hires_init_level-1; lev >= 0; lev--) {
-        average_down_with_grow_cells(lev, vec_zeta_full_domain);
+        average_down_with_grow_cells(lev, vec_zeta_full_domain, true);
     }
 }

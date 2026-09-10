@@ -136,24 +136,35 @@ level 0 (see :ref:`Inputs<sec:Inputs>`). They are analytic, so they need no NetC
 data. ``remora.hires_init_level`` is NetCDF-only and is covered by the developer lanes in
 ``Exec/GulfRefinementTest`` instead, described in that directory's ``README.rst``.
 
-The lanes come in three flavours, because "the run completed" is not evidence that an average-down
+The lanes come in three flavors, because "the run completed" is not evidence that an average-down
 happened, let alone that it was right.
 
 *Transparency.* ``ChannelTest`` sets ``h = 50`` and ``DogboneAnalytic`` sets ``h = 10``, both with
 ``setVal``, covering every grow cell. The mean over any refined block is then the same constant, so the
 hires path must reproduce the corresponding non-hires baseline exactly. These lanes compare against the
 existing ``Channel_Test`` and ``DogboneAnalytic_MLvel`` reference files rather than storing new ones.
-They deliberately *cannot* detect a hires flag that is being ignored -- that is the next flavour's job.
+They deliberately *cannot* detect a hires flag that is being ignored -- that is the next flavor's job.
 
 *Discrimination.* ``Seamount``'s bathymetry is a Gaussian in physical position, so the mean of the
 refined samples in a coarse cell is not the coarse midpoint sample. ``Seamount_hires`` must therefore
 both match its own reference and **differ** from the plain ``Seamount`` one; the difference is about
 16 m at the summit, some 12 orders of magnitude above the comparison tolerance. Without that second
-clause a feature that silently stops taking effect still matches its own snapshot -- which is exactly
-what a misspelled parameter name did in ``Exec/GulfRefinementTest`` before this was tested.
+clause a feature that silently stops taking effect still matches its own snapshot.
 
 *Misconfiguration.* Five lanes assert that a bad combination fails with the message that names it, rather
 than segfaulting, writing out of bounds, or running on data it quietly ignored.
+
+*Partial coverage.* The two ``DogboneAnalytic_MLmask`` tests are the only ones in which a coarse cell is
+part land and part water, which is the case the mask-weighted average-down exists for. Producing such a
+cell in the Dogbone case takes two things: ``hires_grid_level``, which resolves the coastline on the
+refined level instead of injecting it from level 0, and a static box that places the fine grids over
+the coast. The box is static because these cases are at rest, so a field-based indicator such as
+``DogboneAnalytic_MLvel``'s ``x_velocity > 0.05`` would tag nothing anywhere; it also fixes which coarse
+cells come out partly wet, and with ``amr.regrid_int = -1`` they cannot move between the two plotfiles.
+Being at rest is also why they need no reference file of their own -- ``plt00010`` must equal ``plt00000``
+to 1e-14. Under a plain arithmetic average-down the zeroed fine land cells drag the partly covered coarse
+cells off that initial value and stationarity breaks by about 1e-2 in salinity and velocity, so a
+lost mask weighting fails the comparison rather than quietly agreeing with its own snapshot.
 
 +---------------------------------+----------+---------------------------------------------------------+
 | Test                            | nx ny nz | What it asserts                                         |
@@ -191,6 +202,12 @@ than segfaulting, writing out of bounds, or running on data it quietly ignored.
 | Seamount_hires_grid_zero_abort  | 49 48 13 | a hires level of 0 is rejected rather than              |
 |                                 |          |                                                         |
 |                                 |          | dereferencing an array only allocated above level 0     |
++---------------------------------+----------+---------------------------------------------------------+
+| DogboneAnalytic_MLmask          | 42 15 16 | coarse cells that are 6 water of 9 keep their exact     |
+|                                 |          |                                                         |
+|                                 |          | values, so a run at rest stays at rest (ratio 3)        |
++---------------------------------+----------+---------------------------------------------------------+
+| DogboneAnalytic_MLmask_rr2      | 42 15 16 | the same at ratio 2, where the blocks are half water    |
 +---------------------------------+----------+---------------------------------------------------------+
 
 ``Upwelling_Fennel_hires_init`` runs to zero steps: it writes the initial plotfile and exits, which takes

@@ -6,6 +6,10 @@
     ParmParse pp_prob("remora.prob");
     bool traditional = true;
     pp_prob.query("traditional", traditional);
+    // Equal to the eastern value leaves temperature uniform, which a test needs if its
+    // exact solution is rest.
+    Real temp_west = Real(5.0);
+    pp_prob.query("temp_west", temp_west);
 
     bool l_use_salt = m_solverChoice.use_salt;
 
@@ -28,7 +32,7 @@
                     state(i, j, k, Salt_comp) = Real(35.0);
                 }
 
-                state(i,j,k,Temp_comp)= (x_r(i,j,0) < Real(1000.)) ? Real(5.0) : Real(10.0);
+                state(i,j,k,Temp_comp)= (x_r(i,j,0) < Real(1000.)) ? temp_west : Real(10.0);
 
                 // Set tracer = 0 everywhere
                 if (l_do_dye) { state(i, j, k,Tracer_comp) = zero; }

@@ -462,6 +462,67 @@ Examples of Usage
    | The dimensions of all the final grids will be multiples of 32 at
      level 0, multiples of 16 at level 1, and multiples of 8 at level 2.
 
+.. _sec:masking:
+
+Land/Sea Masking
+================
+
+A land/sea mask marks each point as water (1) or land (0). ``remora.mask_type`` selects the
+source: ``none`` leaves everything water, ``analytic`` calls the problem's mask function, and
+``netcdf`` reads ``mask_rho`` from the grid file. Only the rho-point mask is ever read or
+given analytically; the u-, v- and psi-point masks are derived from it as ROMS ``set_masks.F``
+defines them.
+
+As with bathymetry, the mask is specified once and every other level derived from it, so levels
+cannot disagree about the coastline. With ``remora.hires_grid_level < 0`` it is given at level 0
+and injected piecewise-constant onto finer levels. With ``remora.hires_grid_level > 0`` it is
+given on that level over the whole domain, from the same source as the high-resolution
+bathymetry; levels below take it coarsened down, levels above are injected.
+
+Coarsening takes **a coarse cell as land only if all its fine cells are land**; an arithmetic
+mean would give fractional values, and the mask must stay exactly 0 or 1.
+
+Under two-way coupling the fine-to-coarse average is mask-weighted as in ROMS: fine values multiplied
+the fine mask, divided by the number of *wet* fine points, then
+multiplied by the coarse mask. A partly-covered coarse cell thus takes the mean of the water
+under it, not a value pulled toward zero by the land beside it. This is not conservative; ROMS
+makes the same trade deliberately.
+
+``remora.check_mask_consistency`` is a **debug option**, off by default. It validates the masks
+after initialization or restart and after each regrid: that they hold only 0 and 1 (psi points
+may also be 2), that no water cell has a non-positive depth, and that no
+coarse water point sits over fine points that are all land, which would leave the mask-weighted
+average nothing to divide by. It checks the machinery rather than the input, so it is worth
+enabling when bringing up a new grid but not in production; the regression suite runs with it on.
+``remora.mask_consistency`` chooses what happens on failure.
+
+.. _list-of-parameters-mask:
+
+List of Parameters
+------------------
+
++------------------------------------------+----------------------------------------+------------------------+----------------+
+| Parameter                                | Definition                             | Acceptable             | Default        |
+|                                          |                                        |                        |                |
+|                                          |                                        | Values                 |                |
++==========================================+========================================+========================+================+
+| **remora.mask_type**                     | Where the land/sea mask comes          | none,                  | none, or       |
+|                                          |                                        |                        |                |
+|                                          | from                                   | analytic,              | netcdf if      |
+|                                          |                                        |                        |                |
+|                                          |                                        | netcdf                 | ic_type is     |
+|                                          |                                        |                        |                |
+|                                          |                                        |                        | netcdf         |
++------------------------------------------+----------------------------------------+------------------------+----------------+
+| **remora.check_mask_consistency**        | Debug option: validate the masks       | true / false           | false          |
+|                                          |                                        |                        |                |
+|                                          | at startup and after each regrid       |                        |                |
++------------------------------------------+----------------------------------------+------------------------+----------------+
+| **remora.mask_consistency**              | What to do when that check fails.      | abort, warn            | abort          |
+|                                          |                                        |                        |                |
+|                                          | Only read when the check is on         |                        |                |
++------------------------------------------+----------------------------------------+------------------------+----------------+
+
 Simulation Time
 ===============
 

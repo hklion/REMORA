@@ -17,7 +17,6 @@ REMORA::timeStepML (Real time, int /*iteration*/)
     }
 #endif
 
-    // HACK HACK so lev is defined and compiler won't complain, but always say regrid_int=-1
     for (int lev=0; lev <= finest_level;lev++) {
         if (regrid_int > 0)  // We may need to regrid
         {
@@ -36,6 +35,9 @@ REMORA::timeStepML (Real time, int /*iteration*/)
                     // so we save the previous finest level index
                     int old_finest = finest_level;
                     regrid(lev, time);
+
+                    // The refined footprint moved, so the level pairs are new
+                    check_mask_consistency();
 
                     // Mark that we have regridded this level already
                     for (int k = lev; k <= finest_level; ++k) {
