@@ -1774,7 +1774,8 @@ private:
     int do_substep = 1;
 
     /** \brief interpolate the parent's barotropic mass flux in time at the coarse-fine
-     *         interface, rather than holding its step average. Off matches ROMS. */
+     *         interface, rather than holding its step average. Off matches most ROMS
+     *         configurations. */
     bool time_interp_flux = false;
 
     /** \brief correct the coarse tracer with the finer level's accumulated advective flux
