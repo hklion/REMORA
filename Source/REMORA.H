@@ -674,6 +674,12 @@ public:
     /** \brief store this level's barotropic mass flux per unit cell edge length */
     void store_2d_flux (int lev);
 
+    /** \brief apply the lev/lev+1 tracer flux correction onto lev */
+    void reflux_to (int lev);
+
+    /** \brief check that fine cell edges sum to the coarse edge across an interface */
+    void check_cf_metrics (int crse_lev);
+
     /** \brief Set everything up for a step on a level */
     void setup_step(int lev, amrex::Real time, amrex::Real dt_lev);
 
@@ -1657,12 +1663,6 @@ private:
 
     /** \brief build or rebuild the flux register between lev and lev-1 */
     void define_flux_register (int lev);
-
-    /** \brief apply the lev/lev+1 tracer flux correction onto lev */
-    void reflux_to (int lev);
-
-    /** \brief check that fine cell edges sum to the coarse edge across an interface */
-    void check_cf_metrics (int crse_lev);
 
     ////////////////
     // boundary data members
