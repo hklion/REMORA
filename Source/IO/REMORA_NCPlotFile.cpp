@@ -14,6 +14,7 @@
 #include <AMReX_ParmParse.H>
 
 #include "REMORA.H"
+#include "REMORA_DateClock.H"
 #include "REMORA_NCInterface.H"
 #include "REMORA_NCPlotFile.H"
 #include "REMORA_IndexDefines.H"
@@ -438,10 +439,24 @@ void REMORA::WriteNCPlotFile_which(int lev, int which_subdomain, MultiFab const*
         ncf.var("y_psi").put_attr("units","meter");
         ncf.var("y_psi").put_attr("field","y_psi, scalar");
 
+        // Both time stamps run on the model clock, so both carry the reference
+        // date remora.time_ref names, as ROMS writes Rclock%string.
+        const std::string ref_date_string = remora_ref_date_string(solverChoice.time_ref);
+        const std::string ref_calendar = remora_ref_calendar(solverChoice.time_ref);
+
         ncf.def_var("ocean_time", ncutils::NCDType::Real, { nt_name });
         ncf.var("ocean_time").put_attr("long_name","time since initialization");
-        ncf.var("ocean_time").put_attr("units","seconds since 0001-01-01 00:00:00");
+        ncf.var("ocean_time").put_attr("units","seconds since " + ref_date_string);
+        ncf.var("ocean_time").put_attr("calendar",ref_calendar);
         ncf.var("ocean_time").put_attr("field","time, scalar, series");
+
+        // ROMS DSTART: when the run starts, in days on the model clock. Double
+        // regardless of Real -- days since year 1 needs more than a float's
+        // seven significant digits, which would round this to the nearest hour.
+        ncf.def_var("dstart", NC_DOUBLE, {});
+        ncf.var("dstart").put_attr("long_name","time stamp assigned to model initialization");
+        ncf.var("dstart").put_attr("units","days since " + ref_date_string);
+        ncf.var("dstart").put_attr("calendar",ref_calendar);
 
         ncf.def_var("Cs_r", ncutils::NCDType::Real, {nz_r_name});
         ncf.var("Cs_r").put_attr("long_name", "S-coordinate stretching curves at RHO points");
@@ -733,7 +748,6 @@ void REMORA::WriteNCPlotFile_which(int lev, int which_subdomain, MultiFab const*
         // Right now this is hard-wired to {temp, salt, tracer, u, v}
         ncf.put_attr("space_dimension", std::vector<int> { AMREX_SPACEDIM });
 //        ncf.put_attr("current_time", std::vector<double> { time });
-        ncf.put_attr("start_time", std::vector<double> { start_bdy_time });
         ncf.put_attr("CurrentLevel", std::vector<int> { flev });
         ncf.put_attr("DefaultGeometry", std::vector<int> { amrex::DefaultGeometry().Coord() });
 
@@ -808,6 +822,10 @@ void REMORA::WriteNCPlotFile_which(int lev, int which_subdomain, MultiFab const*
             ncf.var("hc").put(&hc);
             ncf.var("theta_s").put(&theta_s);
             ncf.var("theta_b").put(&theta_b);
+
+            // remora.start_time in seconds is ROMS DSTART in days.
+            double dstart = static_cast<double>(start_time) / 86400.0;
+            ncf.var("dstart").put(&dstart);
 
         }
         ncmpi_end_indep_data(ncf.ncid);
