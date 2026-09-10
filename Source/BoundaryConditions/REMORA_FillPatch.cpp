@@ -516,35 +516,6 @@ REMORA::FillCoarsePatchMap (int lev, Real time, MultiFab* mf_to_fill, MultiFab* 
         }
     }
 
-#if 0
-    TimeInterpolatedData cdata = GetDataAtTime(lev-1, time);
-    TimeInterpolatedData fdata = GetDataAtTime(lev  , time);
-    Vector<Real> ctime = {cdata.get_time()};
-
-    Vector<MultiFab*> cmf = {mf_crse};
-    Vector<Real> ctime = {time};
-
-    REMORAPhysBCFunct cphysbc(lev-1,geom[lev-1],
-                             domain_bcs_type,domain_bcs_type_d,
-                             cdata,
-                             m_bc_extdir_vals
-#ifdef REMORA_USE_NETCDF
-                            ,ic_type,bdy_data_xlo,bdy_data_xhi,
-                             bdy_data_ylo,bdy_data_yhi,bdy_time_interval
-#endif
-                            );
-    REMORAPhysBCFunct fphysbc(lev,geom[lev],
-                             domain_bcs_type,domain_bcs_type_d,
-                             fdata,
-                             m_bc_extdir_vals
-#ifdef REMORA_USE_NETCDF
-                            ,ic_type,bdy_data_xlo,bdy_data_xhi,
-                             bdy_data_ylo,bdy_data_yhi,bdy_time_interval
-#endif
-                            );
-#endif
-
-
     mf_crse->FillBoundary(geom[lev-1].periodicity());
     amrex::InterpFromCoarseLevel(*mf_to_fill, mf_to_fill->nGrowVect(), IntVect(0,0,0),
             *mf_crse, 0, icomp, ncomp, geom[lev-1], geom[lev],

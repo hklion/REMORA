@@ -6,3 +6,5 @@ else()
     set(FEXTREMA_EXE ${CMAKE_BINARY_DIR}/Submodules/AMReX/Tools/Plotfile/amrex_fextrema CACHE INTERNAL "Path to fextrema executable for regression tests")
 endif()
 include(${CMAKE_CURRENT_SOURCE_DIR}/CTestList.cmake)
+
+add_subdirectory(Unit)

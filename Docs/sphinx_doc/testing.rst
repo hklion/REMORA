@@ -36,7 +36,7 @@ While performing a ``cmake -LAH ..`` command will give descriptions of every opt
 
 **REMORA_ENABLE_FCOMPARE** -- builds the ``fcompare`` utility from AMReX as well as the executable(s), to allow for testing differences between plot files
 
-**REMORA_ENABLE_TESTS** -- enables the base level regression test suite that will check whether each test will run its executable to completion successfully
+**REMORA_ENABLE_TESTS** -- enables the base level regression test suite that will check whether each test will run its executable to completion successfully, and the unit tests in ``Tests/Unit``
 
 
 Building the Tests
@@ -133,6 +133,21 @@ say the baseline was right, and it cannot notice a feature that has silently sto
 Cheap lanes are worth adding: ``remora.max_step = 0`` with ``remora.plot_int = 1`` is a legal
 initialize-and-dump run of about a second, which is enough for ``add_test_extrema`` to pin an initial
 condition with no time stepper in the way.
+
+Unit tests
+~~~~~~~~~~
+
+Unit tests that exercise individual functions live in ``Tests/Unit``, built as ``remora_unit_tests`` and
+labelled ``unit`` so ``ctest -L unit`` runs them alone and ``ctest -LE unit`` skips them.
+
+There is no framework: a unit test is a ``main()`` that checks answers, prints a line per failure, and
+returns nonzero. To add one, add a ``.cpp``
+beside the existing test and list it in ``Tests/Unit/CMakeLists.txt``. The target links AMReX, so a test
+sees the same precision as the build around it; a case that only holds in double has to be gated on that
+rather than assumed.
+
+The unit test ``REMORA_DateClock_test.cpp`` tests that the date and calendar functions in
+``REMORA_DateClock.H`` match ROMS's ``dateclock.F``.
 
 Regenerating gold files
 ~~~~~~~~~~~~~~~~~~~~~~~

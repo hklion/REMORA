@@ -585,10 +585,16 @@ the run within the calendar the way ROMS ``DSTART`` does. With the default
 ``time_ref = 0``, a run starting on 1 January 2020 sets
 ``remora.start_time = 63713433600``.
 
-Only features that need a date consult this: at present the time-dependent
-atmospheric CO2 options of the Fennel biology model, see :ref:`sec:Fennel`. The
-conversion is ``remora_caldate`` in ``Source/Utils/REMORA_DateClock.H``, a port
-of ROMS ``caldate``.
+NetCDF output records that offset as the scalar variable ``dstart``, in days
+since the reference date, as ROMS does. ``dstart`` and ``ocean_time`` both carry
+the reference date in their ``units`` attribute and the calendar in a
+``calendar`` attribute, so an output file can be read as dates without knowing
+``remora.time_ref``.
+
+Otherwise only features that need a date consult this: at present the
+time-dependent atmospheric CO2 options of the Fennel biology model, see
+:ref:`sec:Fennel`. The conversion is ``remora_caldate`` in
+``Source/Utils/REMORA_DateClock.H``, a port of ROMS ``caldate``.
 
 .. _notes-3:
 
