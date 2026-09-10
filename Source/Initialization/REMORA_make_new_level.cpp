@@ -979,50 +979,6 @@ REMORA::set_zeta_to_Ztavg (int lev, bool apply_eminusp)
     }
 }
 
-/**
- * @param[in   ] lev    level to operate on
- */
-void
-REMORA::update_mskp (int lev)
-{
-    for ( MFIter mfi(*vec_mskr[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi )
-    {
-        Array4<const Real> const& mskr = vec_mskr[lev]->const_array(mfi);
-        Array4<      Real> const& mskp = vec_mskp[lev]->array(mfi);
-
-        // NGROW rings, not one: the stencil reaches mskr(i-1,j-1), and mskr carries NGROW+1.
-        Box bx = mfi.tilebox(); bx.grow(IntVect(NGROW,NGROW,0)); bx.makeSlab(2,0);
-
-        Real cff1 = one;
-        Real cff2 = two;
-
-        ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int)
-        {
-            if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
-                mskp(i,j,0) = one;
-            } else if ((mskr(i-1,j,0) < Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
-                mskp(i,j,0) = cff1;
-            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) < Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
-                mskp(i,j,0) = cff1;
-            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) < Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
-                mskp(i,j,0) = cff1;
-            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) < Real(0.5))) {
-                mskp(i,j,0) = cff1;
-            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) < Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) < Real(0.5))) {
-                mskp(i,j,0) = cff2;
-            } else if ((mskr(i-1,j,0) < Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) < Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
-                mskp(i,j,0) = cff2;
-            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) < Real(0.5)) and (mskr(i,j-1,0) < Real(0.5))) {
-                mskp(i,j,0) = cff2;
-            } else if ((mskr(i-1,j,0) < Real(0.5)) and (mskr(i,j,0) < Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
-                mskp(i,j,0) = cff2;
-            } else {
-                mskp(i,j,0) = zero;
-            }
-
-        });
-    }
-}
 
 /**
  * @param[in   ] lev    level to operate on
@@ -1044,7 +1000,28 @@ REMORA::calculate_nodal_masks (int lev)
         {
             msku(i,j,0) = mskr(i-1,j  ,0) * mskr(i,j,0);
             mskv(i,j,0) = mskr(i  ,j-1,0) * mskr(i,j,0);
-            mskp(i,j,0) = mskr(i-1,j-1,0) * mskr(i,j,0) * mskr(i-1,j,0) * mskr(i,j-1,0);
+            // mskp is 2 along a straight land-sea boundary
+            if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
+                mskp(i,j,0) = one;
+            } else if ((mskr(i-1,j,0) < Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
+                mskp(i,j,0) = one;
+            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) < Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
+                mskp(i,j,0) = one;
+            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) < Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
+                mskp(i,j,0) = one;
+            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) < Real(0.5))) {
+                mskp(i,j,0) = one;
+            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) < Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) < Real(0.5))) {
+                mskp(i,j,0) = two;
+            } else if ((mskr(i-1,j,0) < Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) < Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
+                mskp(i,j,0) = two;
+            } else if ((mskr(i-1,j,0) > Real(0.5)) and (mskr(i,j,0) > Real(0.5)) and (mskr(i-1,j-1,0) < Real(0.5)) and (mskr(i,j-1,0) < Real(0.5))) {
+                mskp(i,j,0) = two;
+            } else if ((mskr(i-1,j,0) < Real(0.5)) and (mskr(i,j,0) < Real(0.5)) and (mskr(i-1,j-1,0) > Real(0.5)) and (mskr(i,j-1,0) > Real(0.5))) {
+                mskp(i,j,0) = two;
+            } else {
+                mskp(i,j,0) = zero;
+            }
         });
     }
 }
@@ -1060,12 +1037,7 @@ void
 REMORA::update_nodal_masks (int lev)
 {
     calculate_nodal_masks(lev);
-    // The psi mask has two definitions: the plain product calculate_nodal_masks just wrote,
-    // and ROMS set_masks.F's rule, which also yields 2 at a free-slip corner. Which one a
-    // level got used to depend on how it was built; keying it off mask_type keeps it uniform.
-    if (solverChoice.mask_type == MaskType::netcdf) {
-        update_mskp(lev);
-    }
+
     vec_msku[lev]->FillBoundary(geom[lev].periodicity());
     vec_mskv[lev]->FillBoundary(geom[lev].periodicity());
     vec_mskp[lev]->FillBoundary(geom[lev].periodicity());

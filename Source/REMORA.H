@@ -307,9 +307,6 @@ public:
     /** \brief Copy maskr to all z levels */
     void fill_3d_masks (int lev);
 
-    /** \brief Set psi-point mask to be consistent with rho-point mask */
-    void update_mskp (int lev);
-
     /** \brief compute dt from CFL considerations */
     amrex::Real estTimeStep (int lev) const;
 
