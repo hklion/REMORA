@@ -305,7 +305,7 @@ add_test_r(DogboneAnalytic_MLquad       "remora_exec" "plt_ml_quad00010")
 add_test_r_gold(Channel_Test_hires       "remora_exec" "plt00010"    Channel_Test)
 add_test_r_gold(DogboneAnalytic_MLhires  "remora_exec" "plt_ml00010" DogboneAnalytic_MLvel)
 
-# The only lanes with a partially-masked coarse cell. Their exact solution is rest, so
+# The only tests with a partially-masked coarse cell. Their exact solution is rest, so
 # they need no gold file: plt00010 must equal plt00000. A plain arithmetic average-down
 # lets the zeroed fine land cells drag those coarse cells off their initial value, which
 # breaks stationarity by ~1e-2 in salt and velocity.

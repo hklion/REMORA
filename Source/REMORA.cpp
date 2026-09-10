@@ -871,7 +871,7 @@ REMORA::set_analytic_vmix(int lev) {
 void
 REMORA::set_masks (int lev)
 {
-    // Ahead of the mask_type == none return as well: that lane still fills the masks, and
+    // Ahead of the mask_type == none return as well: that branch still fills the masks, and
     // AverageDownTo still reads them, so its cached copies go stale here too.
     clear_avgdown_masks(lev);
 
@@ -1933,7 +1933,7 @@ REMORA::init_only (int lev, Real time)
 
     set_bathymetry(lev);
     // Has to follow set_bathymetry, not precede it as it used to: the mask now has a
-    // hires_grid_level lane of its own, which needs the full-domain data read just above,
+    // hires_grid_level path of its own, which needs the full-domain data read just above,
     // and an analytic mask needs the grid coordinates that set_bathymetry -> set_grid_scale
     // fills on the netcdf path.
     set_masks(lev);

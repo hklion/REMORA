@@ -155,7 +155,7 @@ what a misspelled parameter name did in ``Exec/GulfRefinementTest`` before this 
 *Misconfiguration.* Five lanes assert that a bad combination fails with the message that names it, rather
 than segfaulting, writing out of bounds, or running on data it quietly ignored.
 
-*Partial coverage.* The two ``DogboneAnalytic_MLmask`` lanes are the only ones where a coarse cell is
+*Partial coverage.* The two ``DogboneAnalytic_MLmask`` tests are the only ones where a coarse cell is
 partly land and partly water, which is what the mask-weighted average-down exists for. Producing one
 takes both ``hires_grid_level``, so the coastline is resolved on the refined level rather than injected
 from level 0, and a static refinement box over the coast, since velocity-tagged refinement never covers

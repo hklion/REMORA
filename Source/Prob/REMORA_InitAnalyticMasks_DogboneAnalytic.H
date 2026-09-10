@@ -1,5 +1,5 @@
     // Coordinates come from the Geometry rather than remora.vec_xr/vec_yr so that this hook
-    // also works on the full-domain MultiFab used for the hires_grid_level lane, which is
+    // also works on the full-domain MultiFab used for hires_grid_level, which is
     // not built on grids[lev] and so has no per-level coordinate arrays to index. This
     // matches set_grid_coords_from_grid_scale, which puts the rho point of cell i at
     // (i + 1/2) * dx measured from index 0.

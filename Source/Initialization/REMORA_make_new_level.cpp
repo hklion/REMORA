@@ -1052,7 +1052,7 @@ REMORA::calculate_nodal_masks (int lev)
 /**
  * Rebuild the u-, v- and psi-point masks from vec_mskr and fill their ghost cells.
  *
- * Every lane goes through here, so the levels cannot end up with different definitions.
+ * Every path goes through here, so the levels cannot end up with different definitions.
  *
  * @param[in   ] lev    level to operate on
  */

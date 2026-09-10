@@ -7,7 +7,7 @@
         mf_h.setVal(Real(10.0));
     } else {
         // Coordinates from the Geometry rather than remora.vec_xr/vec_yr, as in the mask hook:
-        // the hires_grid_level lane evaluates this on a full-domain MultiFab that is not built
+        // the hires_grid_level path evaluates this on a full-domain MultiFab that is not built
         // on grids[lev], so the per-level coordinate arrays cannot be indexed with its MFIter.
         // Matches set_grid_coords_from_grid_scale's (i + 1/2) * dx convention.
         const Real dx = geom.CellSize(0);

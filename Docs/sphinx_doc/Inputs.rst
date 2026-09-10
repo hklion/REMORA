@@ -478,7 +478,7 @@ cannot disagree about the coastline. With ``remora.hires_grid_level < 0`` it is 
 and injected piecewise-constant onto finer levels. With ``remora.hires_grid_level > 0`` it is
 given on that level over the whole domain, from the same source as the high-resolution
 bathymetry; levels at or below take it coarsened down, levels above are injected. Without that
-lane a refined level inherits a coastline only as well resolved as level 0 resolves it, even
+it a refined level inherits a coastline only as well resolved as level 0 resolves it, even
 where the bathymetry is not.
 
 Coarsening takes **a coarse cell as land only if all its fine cells are land**; an arithmetic

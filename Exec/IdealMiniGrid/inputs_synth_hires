@@ -10,7 +10,7 @@
 #
 # With both hires levels set and coriolis off, the level-0 NetCDF files are never dereferenced:
 # bathymetry, metrics, mask, state and zeta all arrive by coarsening down from level 1. So this
-# lane needs only the two hires files.
+# case needs only the two hires files.
 
 remora.prob_name = IdealMiniGrid
 
@@ -49,9 +49,9 @@ remora.nc_init_file_hires = "hires_ini.nc"
 remora.hires_grid_level   = 1
 remora.hires_init_level   = 1
 
-# Coriolis would want `f` from a level-0 grid file, which this lane does not have, so it stays
+# Coriolis would want `f` from a level-0 grid file, which this case does not have, so it stays
 # off. The mask no longer needs one: hires_grd.nc carries mask_rho, and a level at or below
-# hires_grid_level takes the mask coarsened down from it. Left off here so this lane covers the
+# hires_grid_level takes the mask coarsened down from it. Left off here so this case covers the
 # unmasked path; override with remora.mask_type = netcdf to exercise the mask weighting, and see
 # the VOLUME note below for what that should give.
 remora.mask_type    = "none"
