@@ -2636,7 +2636,7 @@ REMORA::ensure_full_domain_masks (int top_lev)
 
     BoxArray ba;
     ba.define(makeSlab(geom[0].Domain(),2,0));
-    DistributionMapping dm(ba);
+    const DistributionMapping& dm = full_domain_dmap();
     auto mskr_growvect = vec_mskr[0]->nGrowVect();
 
     if (hires_grid_level < 0) {
