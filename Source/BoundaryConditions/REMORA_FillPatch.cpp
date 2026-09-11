@@ -129,11 +129,13 @@ REMORA::FillPatch (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab*> c
         // contribution has to be interpolated. Passing one MultiFab twice makes
         // FillPatchTwoLevels return it whatever the time: fine in lockstep, wrong here.
         Vector<MultiFab*> cmf = {mfs[lev-1], mfs[lev-1]};
+        Vector<Real> ctime    = {time, time};
         if (do_substep && int(mfs_crse_old.size()) >= lev && int(mfs_crse_new.size()) >= lev) {
-            cmf = {mfs_crse_old[lev-1], mfs_crse_new[lev-1]};
+            cmf   = {mfs_crse_old[lev-1], mfs_crse_new[lev-1]};
+            ctime = {t_old[lev-1], t_new[lev-1]};
             mfs_crse_old[lev-1]->FillBoundary(geom[lev-1].periodicity());
+            mfs_crse_new[lev-1]->FillBoundary(geom[lev-1].periodicity());
         }
-        Vector<Real> ctime    = {t_old[lev-1], t_new[lev-1]};
 
         mfs[lev-1]->FillBoundary(geom[lev-1].periodicity());
         amrex::FillPatchTwoLevels(mf_to_fill, mf_to_fill.nGrowVect(), IntVect(0,0,0),
@@ -299,11 +301,13 @@ REMORA::FillPatchNoBC (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab
         // contribution has to be interpolated. Passing one MultiFab twice makes
         // FillPatchTwoLevels return it whatever the time: fine in lockstep, wrong here.
         Vector<MultiFab*> cmf = {mfs[lev-1], mfs[lev-1]};
+        Vector<Real> ctime    = {time, time};
         if (do_substep && int(mfs_crse_old.size()) >= lev && int(mfs_crse_new.size()) >= lev) {
-            cmf = {mfs_crse_old[lev-1], mfs_crse_new[lev-1]};
+            cmf   = {mfs_crse_old[lev-1], mfs_crse_new[lev-1]};
+            ctime = {t_old[lev-1], t_new[lev-1]};
             mfs_crse_old[lev-1]->FillBoundary(geom[lev-1].periodicity());
+            mfs_crse_new[lev-1]->FillBoundary(geom[lev-1].periodicity());
         }
-        Vector<Real> ctime    = {t_old[lev-1], t_new[lev-1]};
 
         mfs[lev-1]->FillBoundary(geom[lev-1].periodicity());
         amrex::FillPatchTwoLevels(mf_to_fill, mf_to_fill.nGrowVect(), IntVect(0,0,0),
