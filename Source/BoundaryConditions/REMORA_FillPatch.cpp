@@ -127,7 +127,8 @@ REMORA::FillPatch (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab*> c
         Vector<Real> ftime    = {t_old[lev], t_new[lev]};
         // A subcycled fine level asks for times inside the parent's step, so the coarse
         // contribution has to be interpolated. Passing one MultiFab twice makes
-        // FillPatchTwoLevels return it whatever the time: fine in lockstep, wrong here.
+        // FillPatchTwoLevels return it whatever the time: fine in lockstep, wrong for
+        // subcycling.
         Vector<MultiFab*> cmf = {mfs[lev-1], mfs[lev-1]};
         Vector<Real> ctime    = {time, time};
         if (do_substep && int(mfs_crse_old.size()) >= lev && int(mfs_crse_new.size()) >= lev) {
@@ -299,7 +300,8 @@ REMORA::FillPatchNoBC (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab
         Vector<Real> ftime    = {t_old[lev], t_new[lev]};
         // A subcycled fine level asks for times inside the parent's step, so the coarse
         // contribution has to be interpolated. Passing one MultiFab twice makes
-        // FillPatchTwoLevels return it whatever the time: fine in lockstep, wrong here.
+        // FillPatchTwoLevels return it whatever the time: fine in lockstep, wrong for
+        // subcycling.
         Vector<MultiFab*> cmf = {mfs[lev-1], mfs[lev-1]};
         Vector<Real> ctime    = {time, time};
         if (do_substep && int(mfs_crse_old.size()) >= lev && int(mfs_crse_new.size()) >= lev) {

@@ -278,7 +278,7 @@ REMORA::Evolve ()
     // istep[0] advances inside the loop, so keep the value it started at.
     const int first_step = istep[0];
 
-    // Levels appear as tagging fires, so reprint the hierarchy when finest_level changes.
+    // Levels appear as tagging occurs, so reprint the hierarchy when finest_level changes.
     int reported_finest = -1;
 
     // Take one coarse timestep by calling timeStep -- which recursively calls timeStep
