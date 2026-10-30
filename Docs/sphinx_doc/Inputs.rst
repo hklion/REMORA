@@ -1778,6 +1778,11 @@ Each interpolated variable is reported at startup with its source grid. Setting
 **remora.frc_regrid** to ``off`` turns the interpolation off, so that a variable not on
 the model grid is an error.
 
+``Tests/tools/make_latlon_forcing_test_data.py`` writes a lat-lon forcing file for a given
+grid file, and a rotated copy of the grid, with fields the interpolation and rotation
+reproduce exactly; it also checks a run's history file against them. It is a useful
+template for preparing real forcing, and ``Exec/IdealMiniGrid/inputs_frc_latlon`` runs it.
+
 The legacy boolean inputs **Tair_from_netcdf**, **qair_from_netcdf**,
 **Pair_from_netcdf**, **srflx_from_netcdf**, **longwave_down_from_netcdf**,
 **rain_from_netcdf**, **cloud_from_netcdf**, and **EminusP_from_netcdf** are
