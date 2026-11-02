@@ -95,6 +95,12 @@ The following problems are currently tested in the CI. More details about the pr
 +-------------------------+----------+-----------+----------+---------------------------------+
 | Seamount                | 49 48 13 | Periodic  | Periodic | Coriolis                        |
 +-------------------------+----------+-----------+----------+---------------------------------+
+| Seamount_particles      | 49 48 13 | Periodic  | Periodic | Coriolis                        |
+|                         |          |           |          |                                 |
+|                         |          |           |          | uniform initial flow carrying   |
+|                         |          |           |          | tracer particles over the       |
+|                         |          |           |          | seamount (needs particles, MPI) |
++-------------------------+----------+-----------+----------+---------------------------------+
 | Upwelling               | 41 80 16 | Periodic  | SlipWall | Coriolis                        |
 |                         |          |           |          |                                 |
 |                         |          |           |          | non-flat bathymetry             |

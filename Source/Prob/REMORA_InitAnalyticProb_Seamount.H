@@ -10,6 +10,13 @@
 
     auto T0 = m_solverChoice.T0;
     auto S0 = m_solverChoice.S0;
+
+    // Optional uniform initial flow, to carry something (e.g. tracer particles)
+    // over the seamount. Zero by default, which is the classic at-rest test of
+    // the pressure-gradient error.
+    ParmParse pp_prob("remora.prob");
+    Real u_0 = Real(0.0); pp_prob.query("u_0", u_0);
+    Real v_0 = Real(0.0); pp_prob.query("v_0", v_0);
     for (MFIter mfi(mf_cons, TilingIfNotGPU()); mfi.isValid(); ++mfi)
     {
         const Box &bx = mfi.tilebox();
@@ -48,7 +55,7 @@
         ParallelFor(xbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept
         {
               // Set the x-velocity
-              x_vel(i, j, k) = zero;
+              x_vel(i, j, k) = u_0;
         });
 
         // Construct a box that is on y-faces
@@ -57,6 +64,6 @@
         // Set the y-velocity
         ParallelFor(ybx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept
         {
-              y_vel(i, j, k) = zero;
+              y_vel(i, j, k) = v_0;
         });
     }

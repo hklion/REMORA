@@ -18,6 +18,7 @@ option(REMORA_ENABLE_DOCUMENTATION "Build documentation" OFF)
 option(REMORA_ENABLE_ALL_WARNINGS  "Enable all compiler warnings" OFF)
 option(REMORA_ENABLE_TESTS         "Enable regression and unit tests" OFF)
 option(REMORA_ENABLE_PNETCDF        "Enable PNetCDF IO" OFF)
+option(REMORA_ENABLE_PARTICLES      "Enable tracer particles" OFF)
 option(REMORA_USE_INTERNAL_AMREX   "Add AMReX as subproject" ON)
 
 # Fennel biology validation. Mirrors GNUmake USE_FENNEL_FORT and

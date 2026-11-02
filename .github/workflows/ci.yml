@@ -62,6 +62,7 @@ jobs:
           -DREMORA_ENABLE_TESTS:BOOL=ON \
           -DREMORA_ENABLE_ALL_WARNINGS:BOOL=ON \
           -DREMORA_ENABLE_FCOMPARE:BOOL=ON \
+          -DREMORA_ENABLE_PARTICLES:BOOL=ON \
           ${{github.workspace}};
         # ${{matrix.mpipreflags}} \
         # -DCODECOVERAGE:BOOL=ON \

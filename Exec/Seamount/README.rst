@@ -7,3 +7,7 @@ horizontal pressure gradient when the vertical coordinates are misaligned with
 the geopotential surfaces, as is the case in problems with spatially-varying
 bathymetry in ROMS/REMORA.
 
+Setting ``remora.prob.u_0`` and/or ``remora.prob.v_0`` (m/s, both 0 by
+default) starts the fluid with that uniform velocity instead, so that it flows
+over the seamount. The ``Seamount_particles`` regression test uses this to carry
+tracer particles over the changing bathymetry.

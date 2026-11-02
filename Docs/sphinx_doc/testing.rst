@@ -38,6 +38,8 @@ While performing a ``cmake -LAH ..`` command will give descriptions of every opt
 
 **REMORA_ENABLE_TESTS** -- enables the base level regression test suite that will check whether each test will run its executable to completion successfully, and the unit tests in ``Tests/Unit``
 
+**REMORA_ENABLE_PARTICLES** -- builds REMORA with tracer particles. With the tests enabled, it also builds AMReX's ``particle_compare`` utility and registers the particle regression tests. Those tests need ``REMORA_ENABLE_MPI`` too, because their gold particle data were made on 2 ranks.
+
 
 Building the Tests
 ~~~~~~~~~~~~~~~~~~
@@ -97,6 +99,12 @@ say the baseline was right, and it cannot notice a feature that has silently sto
 
 ``add_test_r``, ``add_test_r_hitol``
     Snapshot against ``Tests/REMORA_Gold_Files/<test_name>``, at 1e-11 and 1e-5 respectively.
+
+``add_test_r_particles``
+    Snapshot of the mesh fields and of one particle species against ``Tests/REMORA_Gold_Files/<test_name>``,
+    at 1e-11. ``fcompare`` skips particle data, so the particles are checked with ``particle_compare``.
+    That tool matches particles by rank and id grid by grid, so the gold is only valid for the rank count
+    that made it. Registered only when ``REMORA_ENABLE_PARTICLES`` and ``REMORA_ENABLE_MPI`` are on.
 
 ``add_test_r_gold``
     Snapshot against *another* test's gold file. Use it when a run is expected to reproduce an existing

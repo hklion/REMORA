@@ -434,6 +434,31 @@ function(add_test_0 TEST_NAME TEST_EXE PLTFILE)
     )
 endfunction(add_test_0)
 
+# Regression test with particles: the mesh fields are checked against the gold file with
+# fcompare, as in add_test_r, and the particle species SPECIES with particle_compare, since
+# fcompare skips particle data. particle_compare matches particles by cpu and id and compares
+# grid by grid, so the gold is only valid for the rank count it was made with (NP).
+function(add_test_r_particles TEST_NAME TEST_EXE PLTFILE SPECIES)
+
+    setup_test()
+
+    resolve_test_exe("${TEST_DIR}" "${TEST_EXE}" TEST_EXE)
+
+    set(FCOMPARE_TOLERANCE "-r 1e-11 --abs_tol 1.0e-11")
+    set(FCOMPARE_FLAGS "-a ${FCOMPARE_TOLERANCE}")
+    set(test_command sh -c "${MPI_COMMANDS} ${TEST_EXE} ${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.i ${RUNTIME_OPTIONS} > ${TEST_NAME}.log && ${FCOMPARE_EXE} ${FCOMPARE_FLAGS} ${PLOT_GOLD} ${CURRENT_TEST_BINARY_DIR}/${PLTFILE} && ${PARTICLE_COMPARE_EXE} ${FCOMPARE_TOLERANCE} ${PLOT_GOLD} ${CURRENT_TEST_BINARY_DIR}/${PLTFILE} ${SPECIES}")
+
+    add_test(${TEST_NAME} ${test_command})
+    set_tests_properties(${TEST_NAME}
+        PROPERTIES
+        TIMEOUT 5400
+        PROCESSORS ${NP}
+        WORKING_DIRECTORY "${CURRENT_TEST_BINARY_DIR}/"
+        LABELS "regression"
+        ATTACHED_FILES_ON_FAIL "${CURRENT_TEST_BINARY_DIR}/${TEST_NAME}.log"
+    )
+endfunction(add_test_r_particles)
+
 # Standard unit test
 function(add_test_u TEST_NAME)
     setup_test()
@@ -462,6 +487,11 @@ endfunction(add_test_u)
 
 add_test_r(DoublyPeriodic               "remora_exec" "plt00010")
 add_test_r(Seamount                     "remora_exec" "plt00010")
+# Tracer particles over sloping s-levels, so they move vertically across them. The gold particle
+# data come from 2 ranks; see add_test_r_particles.
+if(PARTICLE_COMPARE_EXE AND REMORA_ENABLE_MPI)
+    add_test_r_particles(Seamount_particles "remora_exec" "plt00040" "tracer_particles")
+endif()
 add_test_r(Advection                    "remora_exec" "plt00010")
 add_test_r(Advection_ML                 "remora_exec" "plt00010")
 add_test_r(Upwelling                    "remora_exec" "plt00010")
