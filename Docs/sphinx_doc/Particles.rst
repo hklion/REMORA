@@ -91,7 +91,8 @@ grid therefore draws each particle inside the cell that holds it. Checkpoints in
 geometry's uniform coordinates that the particles move in (see :ref:`ParticleAdvection`), which a
 restart needs. The ``xvel`` and ``yvel`` attributes are physical velocities in m/s.
 
-For an example, build the executable in ``Exec`` and run the ``ParticleAdvectionFlat`` case.
+For an example, build the executable in ``Exec`` and run the ``ParticleAdvectionFlat`` case, or
+``ParticleAdvectionSeamount`` for particles carried over non-flat bathymetry.
 
 .. _ParticleAdvection:
 

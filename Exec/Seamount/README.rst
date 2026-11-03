@@ -9,5 +9,6 @@ bathymetry in ROMS/REMORA.
 
 Setting ``remora.prob.u_0`` and/or ``remora.prob.v_0`` (m/s, both 0 by
 default) starts the fluid with that uniform velocity instead, so that it flows
-over the seamount. The ``Seamount_particles`` regression test uses this to carry
-tracer particles over the changing bathymetry.
+over the seamount. The :ref:`Particle Advection Seamount<particleadvectionseamount>`
+case and the ``Seamount_particles`` regression test use this to carry tracer
+particles over the changing bathymetry.

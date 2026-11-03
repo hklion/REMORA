@@ -85,6 +85,13 @@ Particle Advection Flat
 
 .. include:: ../../Exec/ParticleAdvectionFlat/README
 
+.. _particleadvectionseamount:
+
+Particle Advection Seamount
+---------------------------
+
+.. include:: ../../Exec/ParticleAdvectionSeamount/README.rst
+
 .. _seamount-desc:
 
 Seamount

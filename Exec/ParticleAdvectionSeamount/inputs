@@ -1,0 +1,67 @@
+# ------------------  INPUTS TO MAIN PROGRAM  -------------------
+# Tracer particles carried by a uniform flow over the Seamount bathymetry.
+# Must be built with particles (USE_PARTICLES = TRUE, or
+# -DREMORA_ENABLE_PARTICLES:BOOL=ON).
+remora.prob_name = Seamount
+
+remora.max_step = 240
+remora.stop_time = 1000000.0
+
+# PROBLEM SIZE & GEOMETRY
+remora.prob_lo     =   0.       0.  -5000.
+remora.prob_hi     =   320000.  320000.       0.
+
+remora.n_cell           =  49   48   13
+
+remora.is_periodic = 1 1 0
+
+# TIME STEP CONTROL
+remora.fixed_dt       = 300.0 # Timestep size (seconds)
+remora.ndtfast  = 30          # 30 barotropic steps of 10 s per baroclinic step
+
+# DIAGNOSTICS & VERBOSITY
+remora.sum_interval  = 1       # timesteps between integrated/max quantities, if remora.v > 0
+remora.v             = 0       # verbosity in REMORA.cpp (0: none, 1: integrated quantities, etc, 2: print boxes)
+
+# CHECKPOINT FILES
+remora.check_file      = chk        # root name of checkpoint file
+remora.check_int       = 120        # number of timesteps between checkpoints
+
+# PLOTFILES
+remora.plot_file     = plt        # prefix of plotfile name
+remora.plot_int      = 12         # number of timesteps between plotfiles (one hour)
+remora.plot_vars_3d  = salt temp x_velocity y_velocity z_velocity tracer_particles_count
+remora.plotfile_type = amrex
+
+# PARTICLES
+# The seamount is a Gaussian of half-width 40 km centred at (160 km, 160 km),
+# rising from 5000 m to 500 m depth. The particles start at the cell centres of
+# its flanks, out to two half-widths, through the whole water column.
+remora.use_tracer_particles = 1
+remora.tracer_particles.initial_distribution_type = box
+remora.tracer_particles.particle_box_lo = 80000.   80000.  -100000.
+remora.tracer_particles.particle_box_hi = 240000.  240000.  100000.
+remora.tracer_particles.place_randomly_in_cells = false
+
+# SOLVER CHOICE
+remora.use_coriolis = true
+remora.tracer_horizontal_advection_scheme = "upstream3" # upstream3 or centered4
+
+remora.coriolis_f0 = 1.0e-4 #-8.26e-5
+
+remora.theta_s = 6.5
+remora.theta_b = 2.0
+remora.tcline = 100.
+
+# PROBLEM PARAMETERS
+# Uniform initial flow in m/s, diagonal so both horizontal components carry the
+# particles over the seamount
+remora.prob.u_0 = 0.5
+remora.prob.v_0 = 0.25
+
+remora.R0    = 1027.0  # background density value (Kg/m3) used in Linear Equation of State
+remora.S0    = 32.0    # background salinity (nondimensional) constant
+remora.T0    = 10.0    # background potential temperature (Celsius) constant
+remora.Tcoef = 1.7e-4  # linear equation of state parameter (1/Celsius)
+remora.Scoef = 0.0     # linear equation of state parameter (nondimensional)
+remora.rho0  = 1025.0  # Mean density (Kg/m3) used when Boussinesq approx is inferred

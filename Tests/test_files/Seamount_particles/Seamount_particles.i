@@ -51,7 +51,7 @@ remora.tracer_particles.place_randomly_in_cells = false
 
 # SOLVER CHOICE
 remora.use_coriolis = true
-remora.horizontal_advection_scheme = "upstream3" # upstream3 or centered4
+remora.tracer_horizontal_advection_scheme = "upstream3" # upstream3 or centered4
 
 remora.coriolis_f0 = 1.0e-4 #-8.26e-5
 
