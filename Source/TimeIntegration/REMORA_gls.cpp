@@ -428,6 +428,12 @@ REMORA::gls_corrector (int lev, MultiFab* mf_gls, MultiFab* mf_tke,
     // shear2/buoy2 are per-tile FArrayBoxes in the loops below.
     MultiFab mf_shear2_cached(ba,dm,1,IntVect(NGROW,NGROW,0));
 
+    // The two loops below spread the boxes over several streams, with the synchronizations
+    // that come with that. Their kernels are mostly one thread per column and do not fill
+    // the GPU, so boxes running side by side pay for the synchronizations: on an RTX 2080
+    // with 128x128 boxes the GLS step is 5% faster than with these loops on the default
+    // stream.
+
     const Box& domain = geom[0].Domain();
     const auto dlo = amrex::lbound(domain);
     const auto dhi = amrex::ubound(domain);
@@ -439,7 +445,7 @@ REMORA::gls_corrector (int lev, MultiFab* mf_gls, MultiFab* mf_tke,
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(*mf_gls, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(*mf_gls, TilingIfNotGPU()); mfi.isValid(); ++mfi )
     {
         Box   bx = mfi.tilebox();
         Box gbx1 = mfi.growntilebox(IntVect(NGROW-1,NGROW-1,0));
@@ -509,7 +515,7 @@ REMORA::gls_corrector (int lev, MultiFab* mf_gls, MultiFab* mf_tke,
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(*mf_gls, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(*mf_gls, TilingIfNotGPU()); mfi.isValid(); ++mfi )
     {
         Box  bx = mfi.tilebox();
         Box xbx = surroundingNodes(bx,0);
@@ -976,9 +982,9 @@ REMORA::gls_corrector (int lev, MultiFab* mf_gls, MultiFab* mf_tke,
     if (lev == 0) {
         // At level 0 these fills are exchanges followed, for tke, gls and Akt, by boundary
         // conditions that read and write only the component being filled: one batched
-        // exchange, then the conditions in the old order. The loops above, the exchange and
-        // the conditions run on the default stream, so the exchange skips the
-        // synchronization that would end it (see OnDefaultStream).
+        // exchange, then the conditions in the old order. The loops above synchronize when
+        // they end, and the exchange and the conditions run on the default stream, so the
+        // exchange skips the synchronization that would end it (see OnDefaultStream).
         {
             const Gpu::NoSyncRegion no_sync;
             amrex::ignore_unused(no_sync);
