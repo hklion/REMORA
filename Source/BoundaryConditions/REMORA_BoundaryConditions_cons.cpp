@@ -295,9 +295,22 @@ void REMORAPhysBCFunct::impose_cons_bcs (BoxBatch& batch, const Array4<Real>& de
     {
         Box bx_zlo(bx);  bx_zlo.setBig  (2,std::max(dom_lo.z-1,bx.smallEnd(2)));
         Box bx_zhi(bx);  bx_zhi.setSmall(2,std::min(dom_hi.z+1,bx.bigEnd(2)));
-        // Populate ghost cells on lo-z and hi-z domain boundaries
-
-        // Every box records each loop, with an empty box where there is nothing to do
+        // Populate ghost cells on lo-z and hi-z domain boundaries.
+        //
+        // A box without cells below (above) the domain, such as a 2D field's, gets just its
+        // bottom (top) layer. There foextrap copies each cell onto itself and the other
+        // conditions but reflection set nothing (a side the box does not reach is int_dir),
+        // so skip the layer. Every box records each loop, with an empty box where there is
+        // nothing to do.
+        bool reflect_lo = false, reflect_hi = false;
+        for (int n = 0; n < ncomp; ++n) {
+            reflect_lo = reflect_lo || bcrs[n].lo(2) == REMORABCType::reflect_even
+                                    || bcrs[n].lo(2) == REMORABCType::reflect_odd;
+            reflect_hi = reflect_hi || bcrs[n].hi(2) == REMORABCType::reflect_even
+                                    || bcrs[n].hi(2) == REMORABCType::reflect_odd;
+        }
+        if (bx.smallEnd(2) >= dom_lo.z && !reflect_lo) { bx_zlo = Box(); }
+        if (bx.bigEnd(2)   <= dom_hi.z && !reflect_hi) { bx_zhi = Box(); }
         {
             batch.ParallelFor(bx_zlo.ok() ? bx_zlo & dest_arr_box : Box(), ncomp, [=] AMREX_GPU_DEVICE (int i, int j, int k, int n)
             {
