@@ -1022,6 +1022,14 @@ REMORA::advance_2d (int lev,
             // the interface, the neighbouring box's ghost copy of that face still holds the
             // FillPatch value, and the shared face between the two boxes would be advanced
             // from different neighbours -- the answer then depends on the box layout.
+            //
+            // The faces are written on the default stream or by loops that synchronize when
+            // they end, and the exchange's local copy also runs on the default stream. What
+            // reads ubar and vbar next runs on that stream too (the next fast step), or is an
+            // MFIter loop over several streams outside any NoSyncRegion, which synchronizes
+            // before it starts. So the exchange skips the synchronization that would end it.
+            const Gpu::NoSyncRegion no_sync;
+            amrex::ignore_unused(no_sync);
             const Periodicity& per = geom[lev].periodicity();
             amrex::FillBoundary(Vector<MultiFab*>{vec_ubar[lev].get(), vec_vbar[lev].get()},
                                 Vector<int>{knew, knew}, Vector<int>{1, 1},
