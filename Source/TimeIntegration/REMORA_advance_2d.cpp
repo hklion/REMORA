@@ -954,7 +954,9 @@ REMORA::advance_2d (int lev,
             // Nothing here needs the stream synchronization that ends each exchange's local
             // copy: the boundary conditions run on the same stream, and so does the next
             // fast step. The boundary data read from NetCDF files is filled with loops over
-            // several streams, which need it.
+            // several streams, which need it. Inside the region an MFIter loop does not
+            // synchronize before it starts either, so any loop added here must run on the
+            // default stream.
 #ifdef REMORA_USE_NETCDF
             const bool skip_sync = !solverChoice.boundary_from_netcdf;
 #else

@@ -28,9 +28,12 @@
  * Rules for the recorded loop:
  * - call next_box() at the top of every iteration;
  * - every box makes the same sequence of calls (same functions, boxes may be empty), or
- *   none at all;
- * - nothing else launches GPU work inside the loop, and everything the functions capture
- *   stays valid until launch(): pass temporaries to keep();
+ *   none at all; a box that makes a different number of calls aborts;
+ * - work the loop body launches itself must be on the default stream, so that it runs
+ *   before the recorded calls, and everything the functions capture stays valid until
+ *   launch(): pass temporaries to keep();
+ * - the functions are copied byte for byte to the device, so they must be trivially
+ *   copyable, as any lambda capturing Array4s and scalars is;
  * - iterate with mfiter_info(), which keeps the loop on the default stream without
  *   synchronizing, so the recorded calls and anything the loop body stages on the device
  *   are in stream order with the launch.
@@ -72,7 +75,15 @@ public:
 
     /** Start recording the calls of the next box at the first site. Without recording
      *  this does nothing, so threads of a host loop may share the BoxBatch. */
-    void next_box () noexcept { if (m_defer) { m_cur = 0; } }
+    void next_box ()
+    {
+        if (m_defer) {
+#ifdef AMREX_USE_GPU
+            end_box();
+#endif
+            m_cur = 0;
+        }
+    }
 
     /** Keep obj alive until launch() has queued the kernels that use it */
     template <class T>
@@ -129,6 +140,7 @@ public:
     {
         if (!m_defer) { return; }
 #ifdef AMREX_USE_GPU
+        end_box();
         // A site with one box to work on is launched as the per-box loop would be. The
         // entries of the sites with more go to the device in one copy.
         std::size_t nbytes = 0;
@@ -163,6 +175,7 @@ public:
 #endif
         m_keep.clear();
         m_cur = 0;
+        m_nboxes = 0;
     }
 
 #ifdef AMREX_USE_GPU
@@ -265,9 +278,26 @@ private:
         std::size_t offset = 0;
     };
 
+    /** Cells of a box rounded up to whole warps, counted without overflow */
+    static amrex::Long warp_cells_long (amrex::Box const& b) noexcept {
+        constexpr amrex::Long w = amrex::Gpu::Device::warp_size;
+        if (!b.ok()) { return 0; }
+        return ((b.numPts() + w - 1) / w) * w;
+    }
+
+    /** A box that made calls must have made one at every site */
+    void end_box () const
+    {
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(m_cur == 0 || m_cur == int(m_sites.size()),
+            "BoxBatch: the boxes of a recorded loop made different numbers of calls");
+    }
+
     template <class E>
     void record (E const& e)
     {
+        static_assert(std::is_trivially_copyable<E>::value,
+                      "BoxBatch: the recorded functions must be trivially copyable");
+        if (m_cur == 0) { ++m_nboxes; }
         if (m_cur == int(m_sites.size())) {
             m_sites.emplace_back();
             m_sites.back().launcher = &launch_site<E>;
@@ -275,17 +305,19 @@ private:
             m_sites.back().entry_size = sizeof(E);
         }
         Site& s = m_sites[m_cur++];
-        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(s.launcher == &launch_site<E>,
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(s.launcher == &launch_site<E> && s.nentries == m_nboxes-1,
             "BoxBatch: the boxes of a recorded loop made different calls");
+        const amrex::Long ncells = warp_cells_long(e.b1) + warp_cells_long(e.b2);
+        const amrex::Long maxcells = std::max(amrex::Long(s.maxcells), ncells);
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(amrex::Long(s.nentries+1)*maxcells
+                                         < amrex::Long(std::numeric_limits<int>::max()),
+            "BoxBatch: too many cells for one launch");
         const auto n = s.bytes.size();
         s.bytes.resize(n + sizeof(E));
         std::memcpy(s.bytes.data() + n, &e, sizeof(E));
-        const amrex::Long ncells = amrex::Long(warp_cells(e.b1)) + warp_cells(e.b2);
-        s.maxcells = int(std::max(amrex::Long(s.maxcells), ncells));
+        s.maxcells = int(maxcells);
         if (ncells > 0) { ++s.nlive; s.live = s.nentries; }
         ++s.nentries;
-        AMREX_ALWAYS_ASSERT(amrex::Long(s.nentries)*s.maxcells
-                            < amrex::Long(std::numeric_limits<int>::max()));
     }
 
     amrex::Vector<Site> m_sites;
@@ -294,7 +326,8 @@ private:
 #endif
 
     bool m_defer;
-    int m_cur = 0;
+    int m_cur = 0;      // calls the current box has made
+    int m_nboxes = 0;   // boxes that have made calls since the last launch
     amrex::Vector<std::shared_ptr<void>> m_keep;
 };
 

@@ -99,5 +99,8 @@ void REMORAPhysBCFunct::operator() (MultiFab& mf, const MultiFab& msk, int icomp
             } // box type
         } // OpenMP
 
+    // Nothing waits for these kernels: memory they read (the MultiFabs passed in, the
+    // device BCRecs) may be freed once this returns only because the device work that could
+    // reuse it runs after them on the default stream, or synchronizes that stream first.
     batch.launch();
 } // operator()

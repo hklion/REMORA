@@ -122,12 +122,13 @@ void REMORAPhysBCFunct::impose_xvel_bcs (BoxBatch& batch, const Array4<Real>& de
                 dest_arr(i,j,k) = -dest_arr(iflip,j,k)*msku(i,j,0);
             }
         };
-        // Fill the xlo and xhi faces in one loop and then their ghost cells in one. A box
-        // reaching both sides may do so when the domain is wide enough that neither side
-        // reads what the other writes (reflection reads cells gx from index 0); otherwise
-        // it fills the lo side first, then the hi side, in the last two loops.
+        // Fill the xlo and xhi faces in one loop and then their ghost cells in one when
+        // neither side reads a cell the other writes. Each side writes its face and ghost
+        // cells and reads at most max(2,gx) cells inward from its face (the radiation
+        // gradients, reflection), so a domain more than gx+3 cells wide is enough.
+        // Otherwise the lo side is filled first, then the hi side, in the last two loops.
         const int gx = std::max(std::max(dom_lo.x - bx.smallEnd(0), bx.bigEnd(0) - (dom_hi.x+1)), 0);
-        const bool pair_sides = dom_lo.x == 0 && dom_hi.x + 1 > gx + 3;
+        const bool pair_sides = dom_hi.x + 1 - dom_lo.x > gx + 3;
         const Box lo_face = grow(bx_xlo_face,IntVect(0,-1,0)) & dest_arr_box;
         const Box lo_ghost = grow(bx_xlo,IntVect(0,-1,0)) & dest_arr_box;
         const Box hi_face = grow(bx_xhi_face,IntVect(0,-1,0)) & dest_arr_box;

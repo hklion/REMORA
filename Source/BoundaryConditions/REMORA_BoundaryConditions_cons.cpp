@@ -6,8 +6,8 @@ using namespace amrex;
 
 namespace {
 /** The BCRecs amrex::setBC makes for a box, worked out where the kernels read them: the
- *  domain's condition on each side the box reaches, int_dir on the others. Saves staging a
- *  copy for every box on the device. */
+ *  domain's condition on each side the box reaches, int_dir on the others. Nothing is
+ *  staged on the device per box. */
 struct BoxBCRecs {
     BCRec const* dom;
     int lo_in[AMREX_SPACEDIM];
