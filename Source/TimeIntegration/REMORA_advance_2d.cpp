@@ -1,4 +1,5 @@
 #include <REMORA.H>
+#include <REMORA_BoxBatch.H>
 
 using namespace amrex;
 
@@ -181,12 +182,15 @@ REMORA::advance_2d (int lev,
     MultiFab& mf = *vec_scratch_2d[lev];
 
     // Barotropic mass fluxes, both directions in one launch, with the depth
-    // Drhs = zeta(krhs) + h on either side of the face
+    // Drhs = zeta(krhs) + h on either side of the face. On the GPU each loop over the boxes
+    // below is recorded and launched once for all boxes (see BoxBatch).
+    BoxBatch flux_batch;
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(*mf_rhoS, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(*mf_rhoS, flux_batch.mfiter_info()); mfi.isValid(); ++mfi )
     {
+        flux_batch.next_box();
         Array4<Real const> const& ubar = mf_ubar->const_array(mfi);
         Array4<Real const> const& vbar = mf_vbar->const_array(mfi);
         Array4<Real const> const& zeta = mf_zeta->const_array(mfi);
@@ -198,8 +202,8 @@ REMORA::advance_2d (int lev,
         auto DUon = mf_DUon.array(mfi);
         auto DVom = mf_DVom.array(mfi);
 
-        ParallelFor(makeSlab(mfi.grownnodaltilebox(0, IntVect(NGROW,NGROW,0)),2,0),
-                    makeSlab(mfi.grownnodaltilebox(1, IntVect(NGROW,NGROW,0)),2,0),
+        flux_batch.ParallelFor(makeSlab(mfi.grownnodaltilebox(0, IntVect(NGROW,NGROW,0)),2,0),
+                               makeSlab(mfi.grownnodaltilebox(1, IntVect(NGROW,NGROW,0)),2,0),
         [=] AMREX_GPU_DEVICE (int i, int j, int)
         {
             Real cff1= Real(0.5) * on_u(i,j,0) *((zeta(i,j,0,krhs)+h(i,j,0))+
@@ -213,6 +217,7 @@ REMORA::advance_2d (int lev,
             DVom(i,j,0)=vbar(i,j,0,krhs)*cff1;
         });
     }
+    flux_batch.launch();
 
     // These are needed to pass the tests with bathymetry but I don't quite see why
     if (do_substep && cf_impose_flux) {
@@ -321,11 +326,19 @@ REMORA::advance_2d (int lev,
     const bool is_periodic_in_x = geom[0].isPeriodic(0);
     const bool is_periodic_in_y = geom[0].isPeriodic(1);
 
+    // The climatology nudging below launches its own kernels, which would run ahead of the
+    // recorded ones, so it keeps the per-box launches.
+#ifdef REMORA_USE_NETCDF
+    BoxBatch batch(!solverChoice.do_m2_clim_nudg);
+#else
+    BoxBatch batch;
+#endif
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(*mf_rhoS, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(*mf_rhoS, batch.mfiter_info()); mfi.isValid(); ++mfi )
     {
+        batch.next_box();
         Array4<Real const> const& rhoS = mf_rhoS->const_array(mfi);
         Array4<Real const> const& rhoA = mf_rhoA->const_array(mfi);
         Array4<Real const> const& h    = mf_h->const_array(mfi);
@@ -386,8 +399,8 @@ REMORA::advance_2d (int lev,
         //
         AnyCTO(TypeList<CompileTimeOptions<avg_first_pred,avg_pred,avg_corr>>{}, {avg_mode},
         [&] (auto const& fu, auto const& fv) {
-            ParallelFor(makeSlab(mfi.grownnodaltilebox(0, IntVect(NGROW,NGROW,0)),2,0),
-                        makeSlab(mfi.grownnodaltilebox(1, IntVect(NGROW,NGROW,0)),2,0), fu, fv);
+            batch.ParallelFor(makeSlab(mfi.grownnodaltilebox(0, IntVect(NGROW,NGROW,0)),2,0),
+                              makeSlab(mfi.grownnodaltilebox(1, IntVect(NGROW,NGROW,0)),2,0), fu, fv);
         },
         [=] AMREX_GPU_DEVICE (int i, int j, int, auto mode)
         {
@@ -417,12 +430,12 @@ REMORA::advance_2d (int lev,
         if (predictor_2d_step) {
             Box gbx3D = makeSlab(mfi.growntilebox(IntVect(NGROW+1,NGROW+1,0)),2,0);
             if (first_2d_step) {
-                ParallelFor(gbx3D, [=] AMREX_GPU_DEVICE (int i, int j, int)
+                batch.ParallelFor(gbx3D, [=] AMREX_GPU_DEVICE (int i, int j, int)
                 {
                     Zt_avg1(i,j,0)=zero;
                 });
             } else {
-                ParallelFor(gbx3D, [=] AMREX_GPU_DEVICE (int i, int j, int)
+                batch.ParallelFor(gbx3D, [=] AMREX_GPU_DEVICE (int i, int j, int)
                 {
                     Zt_avg1(i,j,0) += cff1_wt1*zeta(i,j,0,krhs);
                 });
@@ -441,7 +454,7 @@ REMORA::advance_2d (int lev,
         FArrayBox fab_znew(tbxp1D, 2, The_Async_Arena());
         auto znew = fab_znew.array();
         AnyCTO(TypeList<CompileTimeOptions<first_step,leapfrog,adams_moulton>>{}, {scheme},
-        [&] (auto const& f) { ParallelFor(tbxp1D, f); },
+        [&] (auto const& f) { batch.ParallelFor(tbxp1D, f); },
         [=] AMREX_GPU_DEVICE (int i, int j, int, auto sch)
         {
             Real rhs_zeta = zero;
@@ -484,12 +497,13 @@ REMORA::advance_2d (int lev,
         {
             Box gbx1D = makeSlab(mfi.growntilebox(IntVect(NGROW-1,NGROW-1,0)),2,0);
             const bool store_rhs = predictor_2d_step;
-            ParallelFor(gbx1D, [=] AMREX_GPU_DEVICE (int i, int j, int)
+            batch.ParallelFor(gbx1D, [=] AMREX_GPU_DEVICE (int i, int j, int)
             {
                 zeta(i,j,0,knew) = znew(i,j,0,0);
                 if (store_rhs) { rzeta(i,j,0,krhs) = znew(i,j,0,1); }
             });
         }
+        batch.keep(std::move(fab_znew));
 
         //
         // Momentum fluxes at the rho and psi points around the tile: horizontal advection
@@ -507,7 +521,7 @@ REMORA::advance_2d (int lev,
         // [lo:hi] x [lo-1:hi+1]
         AnyCTO(TypeList<CompileTimeOptions<0,1>>{}, {upstream3},
         [&] (auto const& fu, auto const& fv) {
-            ParallelFor(growLo(xbxD,0,1), growLo(ybxD,1,1), fu, fv);
+            batch.ParallelFor(growLo(xbxD,0,1), growLo(ybxD,1,1), fu, fv);
         },
         [=] AMREX_GPU_DEVICE (int i, int j, int, auto up3)
         {
@@ -561,7 +575,7 @@ REMORA::advance_2d (int lev,
             }
         });
 
-        ParallelFor(growLo(xbxD,0,1), growLo(ybxD,1,1),
+        batch.ParallelFor(growLo(xbxD,0,1), growLo(ybxD,1,1),
         [=] AMREX_GPU_DEVICE (int i, int j, int)
         {
             const Real cff = Real(0.5)*(zeta(i,j,0,krhs)+h(i,j,0)) * ( metr(i,j,0,MetricR::pmon_r) *
@@ -589,7 +603,7 @@ REMORA::advance_2d (int lev,
         // psi points: the y-fluxes of u and the x-fluxes of v, both on [lo:hi+1]^2
         AnyCTO(TypeList<CompileTimeOptions<0,1>>{}, {upstream3},
         [&] (auto const& fu, auto const& fv) {
-            ParallelFor(growHi(xbxD,1,1), growHi(ybxD,0,1), fu, fv);
+            batch.ParallelFor(growHi(xbxD,1,1), growHi(ybxD,0,1), fu, fv);
         },
         [=] AMREX_GPU_DEVICE (int i, int j, int, auto up3)
         {
@@ -639,7 +653,7 @@ REMORA::advance_2d (int lev,
             }
         });
 
-        ParallelFor(growHi(xbxD,1,1), growHi(ybxD,0,1),
+        batch.ParallelFor(growHi(xbxD,1,1), growHi(ybxD,0,1),
         [=] AMREX_GPU_DEVICE (int i, int j, int)
         {
             const Real cff = mskp(i,j,0) * Real(0.125) *
@@ -673,7 +687,7 @@ REMORA::advance_2d (int lev,
         if (use_curv) {
             Array4<Real const> const& dndx = vec_dndx[lev]->const_array(mfi);
             Array4<Real const> const& dmde = vec_dmde[lev]->const_array(mfi);
-            ParallelFor(grow(bxD,IntVect(1,1,0)), [=] AMREX_GPU_DEVICE (int i, int j, int)
+            batch.ParallelFor(grow(bxD,IntVect(1,1,0)), [=] AMREX_GPU_DEVICE (int i, int j, int)
             {
                 Real cff1 = Real(0.5) * (vbar(i,j,0,krhs) + vbar(i  ,j+1,0,krhs));
                 Real cff2 = Real(0.5) * (ubar(i,j,0,krhs) + ubar(i+1,j  ,0,krhs));
@@ -690,7 +704,7 @@ REMORA::advance_2d (int lev,
         // separate kernels added them: pressure gradient, advection, Coriolis (with
         // fomn = fcor/(pm*pn)), curvilinear, viscosity.
         //
-        ParallelFor(xbxD, ybxD,
+        batch.ParallelFor(xbxD, ybxD,
         [=] AMREX_GPU_DEVICE (int i, int j, int)
         {
             Real rhs = g_half * on_u(i,j,0) *
@@ -723,7 +737,7 @@ REMORA::advance_2d (int lev,
         });
 
         AnyCTO(TypeList<CompileTimeOptions<0,1>,CompileTimeOptions<0,1>>{}, {use_cor, use_curv},
-        [&] (auto const& fu, auto const& fv) { ParallelFor(xbxD, ybxD, fu, fv); },
+        [&] (auto const& fu, auto const& fv) { batch.ParallelFor(xbxD, ybxD, fu, fv); },
         [=] AMREX_GPU_DEVICE (int i, int j, int, auto cor, auto curv)
         {
             Real rhs = rhs_ubar(i,j,0);
@@ -798,7 +812,7 @@ REMORA::advance_2d (int lev,
             const Real ccff2 = Real(16.0)/Real(12.0);
             const Real ccff3 = Real(5.0)/Real(12.0);
             AnyCTO(TypeList<CompileTimeOptions<couple_first,couple_second,couple_ab3>>{}, {couple},
-            [&] (auto const& fu, auto const& fv) { ParallelFor(xbxD, ybxD, fu, fv); },
+            [&] (auto const& fu, auto const& fv) { batch.ParallelFor(xbxD, ybxD, fu, fv); },
             [=] AMREX_GPU_DEVICE (int i, int j, int, auto cpl)
             {
                 if (cpl.value == couple_first) {
@@ -858,7 +872,7 @@ REMORA::advance_2d (int lev,
         //
         AnyCTO(TypeList<CompileTimeOptions<0,1>,CompileTimeOptions<0,1>,CompileTimeOptions<0,1>>{},
                {scheme == adams_moulton ? 1 : 0, pred, add_frc},
-        [&] (auto const& fu, auto const& fv) { ParallelFor(xbxD, ybxD, fu, fv); },
+        [&] (auto const& fu, auto const& fv) { batch.ParallelFor(xbxD, ybxD, fu, fv); },
         [=] AMREX_GPU_DEVICE (int i, int j, int, auto am3, auto is_pred, auto frc)
         {
             Real rhs = rhs_ubar(i,j,0);
@@ -899,7 +913,9 @@ REMORA::advance_2d (int lev,
                 rvbar(i,j,0,krhs)=rhs;
             }
         });
+        batch.keep(std::move(fab_flx));
     }
+    batch.launch();
 
     // Don't do the FillPatch or rivers at the last truncated predictor step.
     // We may need to move the zeta FillPatch further up
