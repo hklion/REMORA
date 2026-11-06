@@ -1,4 +1,5 @@
 #include <REMORA.H>
+#include <REMORA_DefaultStream.H>
 
 using namespace amrex;
 
@@ -12,7 +13,15 @@ void REMORA::advance_3d_ml (int lev, Real dt_lev)
     // Fill in three ways: 1) interpolate from coarse grid if lev > 0; 2) fill from physical boundaries;
     //                     3) fine-fine fill of ghost cells with FillBoundary call
     //FillPatch(lev, t_old[lev], *cons_new[lev], cons_new, BCVars::cons_bc, BdyVars::t);
-    amrex::FillBoundary(Vector<MultiFab*>{xvel_new[lev], yvel_new[lev]}, geom[lev].periodicity());
+    //
+    // The exchanges in this function skip the synchronization that would end them: their
+    // copies run on the default stream, and what reads the fields next runs on that stream
+    // or synchronizes it first (see OnDefaultStream).
+    {
+        const Gpu::NoSyncRegion no_sync;
+        amrex::ignore_unused(no_sync);
+        amrex::FillBoundary(Vector<MultiFab*>{xvel_new[lev], yvel_new[lev]}, geom[lev].periodicity());
+    }
     //FillPatch(lev, t_old[lev], *zvel_new[lev], zvel_new, BCVars::zvel_bc, BdyVars::null);
 
     //FillPatch(lev, t_old[lev], *vec_sstore[lev], GetVecOfPtrs(vec_sstore), BCVars::cons_bc, BdyVars::t);
@@ -36,6 +45,8 @@ void REMORA::advance_3d_ml (int lev, Real dt_lev)
     // per field above it. Filling all components hands the interpolator the BCRecs of the
     // next bccomps for components 1 and 2, which face_cons_linear_interp ignores.
     if (lev == 0) {
+        const Gpu::NoSyncRegion no_sync;
+        amrex::ignore_unused(no_sync);
         amrex::FillBoundary(Vector<MultiFab*>{vec_ubar[lev].get(), vec_vbar[lev].get()},
                             geom[lev].periodicity());
     } else {
@@ -48,7 +59,11 @@ void REMORA::advance_3d_ml (int lev, Real dt_lev)
     // Fill in three ways: 1) interpolate from coarse grid if lev > 0; 2) fill from physical boundaries;
     //                     3) fine-fine fill of ghost cells with FillBoundary call
     // Note that we need the fine-fine and physical bc's in order to correctly move the particles
-    amrex::FillBoundary(Vector<MultiFab*>{xvel_new[lev], yvel_new[lev]}, geom[lev].periodicity());
+    {
+        const Gpu::NoSyncRegion no_sync;
+        amrex::ignore_unused(no_sync);
+        amrex::FillBoundary(Vector<MultiFab*>{xvel_new[lev], yvel_new[lev]}, geom[lev].periodicity());
+    }
     // Diagnose the true vertical velocity from the updated state; nothing in the
     // dynamics reads it
     compute_wvel(lev, *zvel_new[lev]);
@@ -59,7 +74,7 @@ void REMORA::advance_3d_ml (int lev, Real dt_lev)
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(*cons_new[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(*cons_new[lev], OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real> const& cons = cons_new[lev]->array(mfi);
         Array4<Real> const& mskr = vec_mskr[lev]->array(mfi);

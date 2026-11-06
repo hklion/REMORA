@@ -1,5 +1,6 @@
 #include <REMORA.H>
 #include <AMReX_OpenMP.H>
+#include <REMORA_DefaultStream.H>
 
 using namespace amrex;
 
@@ -84,7 +85,7 @@ REMORA::advance_3d (int lev, MultiFab& mf_cons,
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(mf_cons, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(mf_cons, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real      > const& u = mf_u.array(mfi);
         Array4<Real      > const& v = mf_v.array(mfi);
@@ -205,7 +206,7 @@ REMORA::advance_3d (int lev, MultiFab& mf_cons,
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(mf_cons, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(mf_cons, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real      > const& u = mf_u.array(mfi);
         Array4<Real      > const& v = mf_v.array(mfi);
@@ -282,11 +283,11 @@ REMORA::advance_3d (int lev, MultiFab& mf_cons,
 
     MultiFab mf_W(convert(ba,IntVect(0,0,1)),dm,1,IntVect(NGROW+1,NGROW+1,0));
     // compute_W fills one ghost ring less than mf_W has; keep the rest defined.
-    mf_W.setVal(zero);
+    SetValOnDefaultStream(mf_W, zero);
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(mf_cons, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(mf_cons, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real> const& Huon = mf_Huon->array(mfi);
         Array4<Real> const& Hvom = mf_Hvom->array(mfi);
@@ -364,7 +365,7 @@ REMORA::advance_3d (int lev, MultiFab& mf_cons,
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(mf_cons, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(mf_cons, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real> const& Hz  = mf_Hz->array(mfi);
 
@@ -460,7 +461,7 @@ REMORA::advance_3d (int lev, MultiFab& mf_cons,
 
     if (defer_fine_add) {
         const Real* dx = geom[lev].CellSize();
-        for ( MFIter mfi(mf_cons, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+        for ( MFIter mfi(mf_cons, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
         {
             // FineAdd takes every face the flux FAB holds inside the coarsened tile, so a
             // tile that is not a multiple of the refinement ratio would also add its
@@ -483,7 +484,7 @@ REMORA::advance_3d (int lev, MultiFab& mf_cons,
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(mf_cons, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(mf_cons, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real> const& AK = mf_AK.array(mfi);
         Array4<Real> const& DC = mf_DC.array(mfi);
@@ -531,7 +532,7 @@ REMORA::advance_3d (int lev, MultiFab& mf_cons,
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-        for ( MFIter mfi(mf_cons, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+        for ( MFIter mfi(mf_cons, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
         {
             Box bx = mfi.growntilebox(IntVect(1,1,0));
             Array4<const Real> const& cons_nudg_coeff = vec_nudg_coeff[BdyVars::cons(icomp)][lev]->const_array(mfi);

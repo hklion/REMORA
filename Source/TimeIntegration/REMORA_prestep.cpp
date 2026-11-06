@@ -1,4 +1,5 @@
 #include <REMORA.H>
+#include <REMORA_DefaultStream.H>
 
 using namespace amrex;
 
@@ -65,7 +66,7 @@ REMORA::prestep (int lev,
     // they get rewritten by prestep_t
 
     MultiFab mf_scalarcache(ba,dm,ncons,IntVect(NGROW,NGROW,0));
-    MultiFab::Copy(mf_scalarcache,S_new,0,0,ncons,IntVect(NGROW,NGROW,0));
+    CopyOnDefaultStream(mf_scalarcache,S_new,0,0,ncons,IntVect(NGROW,NGROW,0));
 
 
 #ifdef REMORA_USE_NETCDF
@@ -81,7 +82,7 @@ REMORA::prestep (int lev,
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(S_new, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(S_new, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real> const& DC = mf_DC.array(mfi);
         Array4<Real> const& Akv   = vec_Akv[lev]->array(mfi);

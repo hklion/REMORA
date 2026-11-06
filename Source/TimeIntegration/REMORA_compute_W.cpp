@@ -1,4 +1,5 @@
 #include <REMORA.H>
+#include <REMORA_DefaultStream.H>
 
 using namespace amrex;
 
@@ -86,13 +87,14 @@ REMORA::compute_omega (int lev, MultiFab& mf_omega,
                            amrex::min(mf_Huon.nGrowVect()[d], mf_Hvom.nGrowVect()[d]));
     }
 
-    mf_omega.setVal(zero);
+    SetValOnDefaultStream(mf_omega, zero);
 
-    // Not tiled: compute_W integrates whole columns
+    // Not tiled: compute_W integrates whole columns. The loop and the exchange run on the
+    // default stream without synchronizing (see OnDefaultStream).
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for (MFIter mfi(mf_omega); mfi.isValid(); ++mfi)
+    for (MFIter mfi(mf_omega, OnDefaultStream()); mfi.isValid(); ++mfi)
     {
         Array4<Real> const& W = mf_omega.array(mfi);
 
@@ -109,6 +111,8 @@ REMORA::compute_omega (int lev, MultiFab& mf_omega,
         });
     }
 
+    const Gpu::NoSyncRegion no_sync;
+    amrex::ignore_unused(no_sync);
     mf_omega.FillBoundary(geom[lev].periodicity());
 }
 
@@ -175,7 +179,7 @@ REMORA::compute_wvel (int lev, MultiFab& mf_w, const MultiFab& mf_omega)
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for (MFIter mfi(mf_omega); mfi.isValid(); ++mfi)
+    for (MFIter mfi(mf_omega, OnDefaultStream()); mfi.isValid(); ++mfi)
     {
         Array4<Real      > const& wvel  = mf_w.array(mfi);
         Array4<Real const> const& omega = mf_omega.const_array(mfi);
@@ -247,7 +251,7 @@ REMORA::set_massflux_3d (int lev, MultiFab& mf_Huon, MultiFab& mf_Hvom)
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for (MFIter mfi(mf_Huon, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+    for (MFIter mfi(mf_Huon, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi)
     {
         Array4<Real      > const& Huon = mf_Huon.array(mfi);
         Array4<Real const> const& u    = xvel_new[lev]->const_array(mfi);
@@ -262,7 +266,7 @@ REMORA::set_massflux_3d (int lev, MultiFab& mf_Huon, MultiFab& mf_Hvom)
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for (MFIter mfi(mf_Hvom, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+    for (MFIter mfi(mf_Hvom, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi)
     {
         Array4<Real      > const& Hvom = mf_Hvom.array(mfi);
         Array4<Real const> const& v    = yvel_new[lev]->const_array(mfi);

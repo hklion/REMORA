@@ -5,6 +5,7 @@
 #include <REMORA_DataStruct.H>
 #include <REMORA.H>
 #include <REMORA_prob_common.H>
+#include <REMORA_DefaultStream.H>
 
 using namespace amrex;
 
@@ -128,10 +129,12 @@ REMORA::stretch_transform (int lev)
     [[maybe_unused]] auto s_r_dat = s_r.data();
     auto Cs_r_dat = Cs_r.data();
 
+    // Both loops and the exchanges run on the default stream, in order, without
+    // synchronizing (see OnDefaultStream).
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(*cons_new[lev], RowTilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(*cons_new[lev], OnDefaultStream(RowTilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real> const& z_w = (mf_z_w)->array(mfi);
         Array4<Real> const& z_r = (mf_z_r)->array(mfi);
@@ -167,8 +170,6 @@ REMORA::stretch_transform (int lev)
         });
 
         // ROMS Transform 2
-        Gpu::streamSynchronize();
-
         amrex::ParallelFor(wgbx3, [=] AMREX_GPU_DEVICE (int i, int j, int k)
         {
             if (k < N) {
@@ -191,8 +192,6 @@ REMORA::stretch_transform (int lev)
             }
         });
 
-        Gpu::streamSynchronize();
-
         amrex::ParallelFor(gbx3, [=] AMREX_GPU_DEVICE (int i, int j, int k)
         {
               Hz(i,j,k)=z_w(i,j,k+1)-z_w(i,j,k);
@@ -200,15 +199,19 @@ REMORA::stretch_transform (int lev)
 
     } // mfi
 
-    vec_z_w[lev]->FillBoundary(geom[lev].periodicity());
-    vec_z_r[lev]->FillBoundary(geom[lev].periodicity());
-    vec_Hz[lev]->FillBoundary(geom[lev].periodicity());
+    {
+        const Gpu::NoSyncRegion no_sync;
+        amrex::ignore_unused(no_sync);
+        vec_z_w[lev]->FillBoundary(geom[lev].periodicity());
+        vec_z_r[lev]->FillBoundary(geom[lev].periodicity());
+        vec_Hz[lev]->FillBoundary(geom[lev].periodicity());
+    }
 
     // Define nodal z as average of z on w-faces
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(*cons_new[lev], RowTilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(*cons_new[lev], OnDefaultStream(RowTilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real> const& z_w = (mf_z_w)->array(mfi);
         Array4<Real> const& z_phys_nd  = (mf_z_phys_nd)->array(mfi);
@@ -248,6 +251,8 @@ REMORA::stretch_transform (int lev)
 
     // Note that we do *not* want to do a multilevel fill here -- we have
     // already filled z_phys_nd on the grown boxes, but we enforce periodicity just in case
+    const Gpu::NoSyncRegion no_sync;
+    amrex::ignore_unused(no_sync);
     vec_z_phys_nd[lev]->FillBoundary(geom[lev].periodicity());
 }
 /**

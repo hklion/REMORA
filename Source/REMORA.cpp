@@ -5,6 +5,7 @@
 #include <REMORA_prob_common.H>
 #include <REMORA.H>
 #include <REMORA_MaskedAverageDown.H>
+#include <REMORA_DefaultStream.H>
 #include <REMORA_LatLonRegridMath.H>
 
 #ifdef REMORA_USE_NETCDF
@@ -1051,9 +1052,9 @@ void
 REMORA::set_analytic_vmix(int lev) {
     BL_PROFILE("REMORA::set_analytic_vmix()");
     Real time = zero;
-    vec_Akv[lev]->setVal(solverChoice.Akv_bak);
+    SetValOnDefaultStream(*vec_Akv[lev], solverChoice.Akv_bak);
     for (int n = 0; n < NAT; n++) {
-        vec_Akt[lev]->setVal(solverChoice.Akt_bak[n], n, 1);
+        SetValOnDefaultStream(*vec_Akt[lev], solverChoice.Akt_bak[n], n, 1, IntVect(0));
     }
     prob->init_analytic_vmix(lev, geom[lev], solverChoice, *this,*vec_Akv[lev], *vec_Akt[lev]);
     FillPatch(lev, time, *vec_Akv[lev], GetVecOfPtrs(vec_Akv), zvel_bc(), BdyVars::null,0,true,false);

@@ -4,6 +4,7 @@
 
 #include <REMORA.H>
 #include <REMORA_prob_common.H>
+#include <REMORA_DefaultStream.H>
 #include <AMReX_FillPatchUtil.H>
 #include <AMReX_Interpolater.H>
 
@@ -1208,8 +1209,10 @@ REMORA::set_zeta_to_Ztavg (int lev, bool apply_eminusp)
     BL_PROFILE("REMORA::set_zeta_to_Ztavg()");
     std::unique_ptr<MultiFab>& mf_zeta = vec_zeta[lev];
     std::unique_ptr<MultiFab>& mf_Zt_avg1  = vec_Zt_avg1[lev];
+    // The loops and the exchange run on the default stream without synchronizing (see
+    // OnDefaultStream).
     if (solverChoice.eminusp_correct_ssh && apply_eminusp) {
-        for ( MFIter mfi(*vec_zeta[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi )
+        for ( MFIter mfi(*vec_zeta[lev], OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
         {
             Array4<Real> const& Zt_avg1 = (mf_Zt_avg1)->array(mfi);
             Array4<const Real> const& evap = vec_evap[lev]->const_array(mfi);
@@ -1234,11 +1237,13 @@ REMORA::set_zeta_to_Ztavg (int lev, bool apply_eminusp)
             });
         }
     }
-    Gpu::streamSynchronize();
+    {
+        const Gpu::NoSyncRegion no_sync;
+        amrex::ignore_unused(no_sync);
+        vec_Zt_avg1[lev]->FillBoundary(geom[lev].periodicity());
+    }
 
-    vec_Zt_avg1[lev]->FillBoundary(geom[lev].periodicity());
-
-    for ( MFIter mfi(*vec_zeta[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(*vec_zeta[lev], OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Box  bx3 = mfi.tilebox(); bx3.grow(IntVect(NGROW+1,NGROW+1,0));
         Array4<Real> const& zeta = mf_zeta->array(mfi);

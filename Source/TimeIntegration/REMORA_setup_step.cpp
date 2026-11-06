@@ -1,4 +1,5 @@
 #include <REMORA.H>
+#include <REMORA_DefaultStream.H>
 
 using namespace amrex;
 
@@ -89,16 +90,18 @@ REMORA::setup_step (int lev, Real time, Real dt_lev)
     FillPatchNoBC(lev, time, *xvel_new[lev], xvel_new, BdyVars::u,0,true,true, xvel_old, xvel_new);
     FillPatchNoBC(lev, time, *yvel_new[lev], yvel_new, BdyVars::v,0,true,true, yvel_old, yvel_new);
 
-    mf_rufrc->setVal(zero);
-    mf_rvfrc->setVal(zero);
+    // From here on the loops, fills and exchanges of this step run on the default stream
+    // without synchronizing, where nothing else needs them to (see OnDefaultStream).
+    SetValOnDefaultStream(*mf_rufrc, zero);
+    SetValOnDefaultStream(*mf_rvfrc, zero);
 
     int iic = istep[lev];
     int ntfirst = 0;
     if(iic==ntfirst) {
-        MultiFab::Copy(S_new,S_old,0,0,S_new.nComp(),S_new.nGrowVect());
-        MultiFab::Copy(U_new,U_old,0,0,U_new.nComp(),U_new.nGrowVect());
-        MultiFab::Copy(V_new,V_old,0,0,V_new.nComp(),V_new.nGrowVect());
-        MultiFab::Copy(W_new,W_old,0,0,W_new.nComp(),W_new.nGrowVect());
+        CopyOnDefaultStream(S_new,S_old,0,0,S_new.nComp(),S_new.nGrowVect());
+        CopyOnDefaultStream(U_new,U_old,0,0,U_new.nComp(),U_new.nGrowVect());
+        CopyOnDefaultStream(V_new,V_old,0,0,V_new.nComp(),V_new.nGrowVect());
+        CopyOnDefaultStream(W_new,W_old,0,0,W_new.nComp(),W_new.nGrowVect());
     }
 
     // Refresh the atmospheric forcing fields feeding the bulk-flux path.
@@ -124,7 +127,7 @@ REMORA::setup_step (int lev, Real time, Real dt_lev)
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(S_new, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(S_new, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real const> const& h     = vec_h[lev]->const_array(mfi);
         Array4<Real const> const& Hz    = vec_Hz[lev]->const_array(mfi);
@@ -210,7 +213,7 @@ REMORA::setup_step (int lev, Real time, Real dt_lev)
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-        for ( MFIter mfi(S_new, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+        for ( MFIter mfi(S_new, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
         {
             Array4<Real      > const& stflx =  vec_stflx[lev]->array(mfi);
             Array4<Real      > const& btflx =  vec_btflx[lev]->array(mfi);
@@ -229,7 +232,7 @@ REMORA::setup_step (int lev, Real time, Real dt_lev)
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-        for ( MFIter mfi(S_new, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+        for ( MFIter mfi(S_new, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
         {
             Array4<Real      > const& stflx =  vec_stflx[lev]->array(mfi);
             Array4<Real      > const& btflx =  vec_btflx[lev]->array(mfi);
@@ -255,7 +258,7 @@ REMORA::setup_step (int lev, Real time, Real dt_lev)
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-        for ( MFIter mfi(S_new, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+        for ( MFIter mfi(S_new, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
         {
             Array4<Real      > const& logdrg_tmp = mf_logdrg_tmp.array(mfi);
             Array4<Real const> const& z_r   = mf_z_r->const_array(mfi);
@@ -275,7 +278,7 @@ REMORA::setup_step (int lev, Real time, Real dt_lev)
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(S_new, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(S_new, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real      > const& bustr = mf_bustr->array(mfi);
         Array4<Real      > const& bvstr = mf_bvstr->array(mfi);
@@ -340,7 +343,7 @@ REMORA::setup_step (int lev, Real time, Real dt_lev)
     set_zeta_to_Ztavg(lev);
 
     MultiFab mf_W(convert(ba,IntVect(0,0,1)),dm,1,IntVect(NGROW+1,NGROW+1,0));
-    mf_W.setVal(zero);
+    SetValOnDefaultStream(mf_W, zero);
 
 
     if (solverChoice.use_prestep) {
@@ -354,8 +357,14 @@ REMORA::setup_step (int lev, Real time, Real dt_lev)
                 iic, ntfirst, nnew, nstp, nrhs, N, dt_lev);
     }
 
-    // We use FillBoundary not FillPatch here since mf_W is single-level scratch space
-    mf_W.FillBoundary(geom[lev].periodicity());
+    // We use FillBoundary not FillPatch here since mf_W is single-level scratch space.
+    // prestep and the boundary conditions run on the default stream, so the exchange
+    // between them skips the synchronization that would end it (see OnDefaultStream).
+    {
+        const Gpu::NoSyncRegion no_sync;
+        amrex::ignore_unused(no_sync);
+        mf_W.FillBoundary(geom[lev].periodicity());
+    }
     (*physbcs[lev])(mf_W,*mf_mskr.get(),0,1,mf_W.nGrowVect(),t_new[lev],zvel_bc());
 
 #ifdef REMORA_USE_NETCDF
@@ -369,7 +378,7 @@ REMORA::setup_step (int lev, Real time, Real dt_lev)
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(S_old, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(S_old, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real const> const& Hz    = vec_Hz[lev]->const_array(mfi);
         Array4<Real> const& Huon  = vec_Huon[lev]->array(mfi);
@@ -532,7 +541,11 @@ REMORA::setup_step (int lev, Real time, Real dt_lev)
     //FillPatch(lev, time, *cons_new[lev], cons_new, BCVars::cons_bc, BdyVars::t);
     FillPatch(lev, time, *vec_sstore[lev], GetVecOfPtrs(vec_sstore), BCVars::cons_bc, BdyVars::t,0,true,true,0,0,dt_lev,*cons_old[lev]);
 
-    // Don't actually want to apply boundary conditions here
+    // Don't actually want to apply boundary conditions here. Huon and Hvom were written on
+    // the default stream, and what reads them next runs there or synchronizes it first, so
+    // the exchange skips the synchronization that would end it (see OnDefaultStream).
+    const Gpu::NoSyncRegion no_sync;
+    amrex::ignore_unused(no_sync);
     amrex::FillBoundary(Vector<MultiFab*>{vec_Huon[lev].get(), vec_Hvom[lev].get()},
                         geom[lev].periodicity());
 }

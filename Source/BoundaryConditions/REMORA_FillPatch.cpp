@@ -2,12 +2,38 @@
 #include <REMORA_PhysBCFunct.H>
 #include <REMORA_IndexDefines.H>
 #include <REMORA_TimeInterpolatedData.H>
+#include <REMORA_DefaultStream.H>
 
 using namespace amrex;
 
 PhysBCFunctNoOp null_bc;
 
 namespace {
+/**
+ * \brief Fill mf on level 0 from src, a level's data at both times t_old and t_new.
+ *
+ * amrex::FillPatchSingleLevel from mf itself, with no boundary function, is just the
+ * exchange of mf, so then do the exchange directly. Its copy runs on the default stream, and
+ * whatever reads mf next runs on that stream too or synchronizes it first (see
+ * OnDefaultStream), so the exchange skips the synchronization that would end it. From any
+ * other MultiFab FillPatchSingleLevel may copy or interpolate in time with a loop over
+ * several streams, and keeps its synchronizations.
+ */
+void fill_single_level (MultiFab& mf, Real time, MultiFab* src, Real t_old, Real t_new,
+                        int icomp, int ncomp, const Geometry& geom, int bccomp)
+{
+    if (&mf == src) {
+        const Gpu::NoSyncRegion no_sync;
+        amrex::ignore_unused(no_sync);
+        mf.FillBoundary(icomp, ncomp, mf.nGrowVect(), geom.periodicity());
+    } else {
+        Vector<MultiFab*> fmf = {src, src};
+        Vector<Real> ftime    = {t_old, t_new};
+        amrex::FillPatchSingleLevel(mf, time, fmf, ftime, icomp, icomp, ncomp,
+                                    geom, null_bc, bccomp);
+    }
+}
+
 /** \brief dst(comp) = src(comp) wherever mask is set, ghost cells included */
 void copy_on_mask (MultiFab& dst, const MultiFab& src, const iMultiFab& mask, int comp)
 {
@@ -296,10 +322,8 @@ REMORA::FillPatch (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab*> c
 
     if (lev == 0)
     {
-        Vector<MultiFab*> fmf = {mfs[lev], mfs[lev]};
-        Vector<Real> ftime    = {t_old[lev], t_new[lev]};
-        amrex::FillPatchSingleLevel(mf_to_fill, time, fmf, ftime, icomp, icomp, ncomp,
-                                    geom[lev], null_bc, bccomp);
+        fill_single_level(mf_to_fill, time, mfs[lev], t_old[lev], t_new[lev], icomp, ncomp,
+                          geom[lev], bccomp);
     }
     else
     {
@@ -505,14 +529,18 @@ REMORA::FillPatchBCs (int lev, Real time, MultiFab& mf_to_fill,
 #else
     amrex::ignore_unused(bdy_var_type, icomp_calc, dt_lev);
 #endif
-    // Fill corners of the domain with periodic data
+    // Fill corners of the domain with periodic data. The boundary conditions above run on the
+    // default stream, or synchronize when they end, and the exchange's copy runs on the
+    // default stream too, so it skips the synchronization that would end it: what reads the
+    // field next runs on that stream, or synchronizes it first (see OnDefaultStream).
     if  ( mf_box.ixType() == IndexType(IntVect(0,0,0)) ) {
+        const Gpu::NoSyncRegion no_sync;
+        amrex::ignore_unused(no_sync);
         mf_to_fill.EnforcePeriodicity(geom[lev].periodicity());
     }
 
     // Also enforce free-slip at top boundary (on xvel or yvel). Without ghost cells in z
-    // (ubar and vbar) there is nothing above the top to set, so skip the loop and the
-    // device synchronization that comes with it.
+    // (ubar and vbar) there is nothing above the top to set, so skip the loop.
     if ( ((mf_box.ixType() == IndexType(IntVect(1,0,0))) ||
           (mf_box.ixType() == IndexType(IntVect(0,1,0)))) && mf_to_fill.nGrowVect()[2] > 0 )
     {
@@ -520,7 +548,7 @@ REMORA::FillPatchBCs (int lev, Real time, MultiFab& mf_to_fill,
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-        for (MFIter mfi(mf_to_fill); mfi.isValid(); ++mfi)
+        for (MFIter mfi(mf_to_fill, OnDefaultStream()); mfi.isValid(); ++mfi)
         {
             Box gbx  = mfi.growntilebox(); // Note this is face-centered since vel is
             gbx.setSmall(2,khi+1);
@@ -633,10 +661,8 @@ REMORA::FillPatchNoBC (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab
 
     if (lev == 0)
     {
-        Vector<MultiFab*> fmf = {mfs[lev], mfs[lev]};
-        Vector<Real> ftime    = {t_old[lev], t_new[lev]};
-        amrex::FillPatchSingleLevel(mf_to_fill, time, fmf, ftime, icomp, icomp, ncomp,
-                                    geom[lev], null_bc, bccomp);
+        fill_single_level(mf_to_fill, time, mfs[lev], t_old[lev], t_new[lev], icomp, ncomp,
+                          geom[lev], bccomp);
     }
     else
     {
