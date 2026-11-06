@@ -1,6 +1,7 @@
 #include <iomanip>
 #include <REMORA.H>
 #include <REMORA_PhysBCFunct.H>
+#include <REMORA_DefaultStream.H>
 
 using namespace amrex;
 
@@ -26,7 +27,7 @@ void group_average_faces (MultiFab& mf, const iMultiFab& mask, int set_mask, int
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for (MFIter mfi(mf); mfi.isValid(); ++mfi)
+    for (MFIter mfi(mf, OnDefaultStream()); mfi.isValid(); ++mfi)
     {
         const Box& bx = mfi.validbox();
         const auto& a = mf.array(mfi);
@@ -158,15 +159,17 @@ REMORA::set_2d_cf_bcs (int lev, Real time, int know, int knew)
 
     // Overwrites what the fill patchers just set from the parent's ubar, which would not
     // conserve mass. Every fast step: unlike a ROMS contact point on a physical perimeter,
-    // these faces are interior and the barotropic solver rewrites them.
+    // these faces are interior and the barotropic solver rewrites them. The loops here and in
+    // the fill patchers run on the default stream without synchronizing (see
+    // OnDefaultStream).
     const int set_mask = FPr_Dubar[lev-1].GetSetMaskVal();
 
     MultiFab Dubar_cf(vec_Dubar_new[lev]->boxArray(), vec_Dubar_new[lev]->DistributionMap(),
                       1, vec_Dubar_new[lev]->nGrowVect());
     MultiFab Dvbar_cf(vec_Dvbar_new[lev]->boxArray(), vec_Dvbar_new[lev]->DistributionMap(),
                       1, vec_Dvbar_new[lev]->nGrowVect());
-    Dubar_cf.setVal(zero);
-    Dvbar_cf.setVal(zero);
+    SetValOnDefaultStream(Dubar_cf, zero);
+    SetValOnDefaultStream(Dvbar_cf, zero);
 
     FPr_Dubar[lev-1].FillSet(Dubar_cf, time, no_bc, domain_bcs_type);
     FPr_Dvbar[lev-1].FillSet(Dvbar_cf, time, no_bc, domain_bcs_type);
@@ -182,7 +185,7 @@ REMORA::set_2d_cf_bcs (int lev, Real time, int know, int knew)
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(*vec_ubar[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(*vec_ubar[lev], OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real      > const& ubar  = vec_ubar[lev]->array(mfi);
         Array4<Real const> const& Dubar = Dubar_cf.const_array(mfi);
@@ -275,7 +278,7 @@ REMORA::set_2d_cf_bcs (int lev, Real time, int know, int knew)
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(*vec_vbar[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(*vec_vbar[lev], OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real      > const& vbar  = vec_vbar[lev]->array(mfi);
         Array4<Real const> const& Dvbar = Dvbar_cf.const_array(mfi);
@@ -316,14 +319,16 @@ REMORA::set_2d_cf_flux (int lev, Real time, MultiFab& mf_DUon, MultiFab& mf_DVom
 
     BL_PROFILE("REMORA::set_2d_cf_flux()");
 
+    // The loops here and in the fill patchers run on the default stream without
+    // synchronizing (see OnDefaultStream).
     const int set_mask = FPr_Dubar[lev-1].GetSetMaskVal();
 
     MultiFab Dubar_cf(vec_Dubar_new[lev]->boxArray(), vec_Dubar_new[lev]->DistributionMap(),
                       1, vec_Dubar_new[lev]->nGrowVect());
     MultiFab Dvbar_cf(vec_Dvbar_new[lev]->boxArray(), vec_Dvbar_new[lev]->DistributionMap(),
                       1, vec_Dvbar_new[lev]->nGrowVect());
-    Dubar_cf.setVal(zero);
-    Dvbar_cf.setVal(zero);
+    SetValOnDefaultStream(Dubar_cf, zero);
+    SetValOnDefaultStream(Dvbar_cf, zero);
 
     FPr_Dubar[lev-1].FillSet(Dubar_cf, time, no_bc, domain_bcs_type);
     FPr_Dvbar[lev-1].FillSet(Dvbar_cf, time, no_bc, domain_bcs_type);
@@ -338,7 +343,7 @@ REMORA::set_2d_cf_flux (int lev, Real time, MultiFab& mf_DUon, MultiFab& mf_DVom
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(mf_DUon, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(mf_DUon, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real      > const& DUon  = mf_DUon.array(mfi);
         Array4<Real const> const& Dubar = Dubar_cf.const_array(mfi);
@@ -357,7 +362,7 @@ REMORA::set_2d_cf_flux (int lev, Real time, MultiFab& mf_DUon, MultiFab& mf_DVom
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for ( MFIter mfi(mf_DVom, TilingIfNotGPU()); mfi.isValid(); ++mfi )
+    for ( MFIter mfi(mf_DVom, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi )
     {
         Array4<Real      > const& DVom  = mf_DVom.array(mfi);
         Array4<Real const> const& Dvbar = Dvbar_cf.const_array(mfi);

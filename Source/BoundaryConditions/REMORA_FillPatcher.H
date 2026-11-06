@@ -2,6 +2,7 @@
 #define REMORA_FILLPATCHER_H_
 
 #include <REMORA_Constants.H>
+#include <REMORA_DefaultStream.H>
 #include <AMReX_FillPatchUtil.H>
 #include <AMReX_Interp_C.H>
 #include <AMReX_MFInterp_C.H>
@@ -141,11 +142,12 @@ REMORAFillPatcher::Fill (amrex::MultiFab& mf, amrex::Real time,
                                           m_cf_crse_data_old->DistributionMap(),
                                           m_ncomp, amrex::IntVect{0});
 
-    // Time interpolate the coarse data
-    amrex::MultiFab::LinComb(crse_data_time_interp,
-                             fac_old, *(m_cf_crse_data_old), 0,
-                             fac_new, *(m_cf_crse_data_new), 0,
-                             0, m_ncomp, amrex::IntVect{0});
+    // Time interpolate the coarse data. This and the interpolation below run on the
+    // default stream without synchronizing (see OnDefaultStream).
+    LinCombOnDefaultStream(crse_data_time_interp,
+                           fac_old, *(m_cf_crse_data_old), 0,
+                           fac_new, *(m_cf_crse_data_new), 0,
+                           0, m_ncomp, amrex::IntVect{0});
 
     // Call correct spatial interpolation type
     amrex::IndexType m_ixt = mf.boxArray().ixType();

@@ -1,5 +1,6 @@
 #include <REMORA.H>
 #include <REMORA_BoxBatch.H>
+#include <REMORA_DefaultStream.H>
 
 using namespace amrex;
 
@@ -17,13 +18,19 @@ namespace {
  * on this level covers pick up a 1, so the remaining zeros are the coarse-fine and
  * domain-boundary ghosts. Domain ghosts are excluded so the physical boundary conditions,
  * applied after the FillPatch, are not overwritten.
+ *
+ * Everything here runs on the default stream without synchronizing (see OnDefaultStream).
  */
 void fill_ghost_kcomps (MultiFab& mf, int knew, const Geometry& geom)
 {
     MultiFab valid(mf.boxArray(), mf.DistributionMap(), 1, mf.nGrowVect());
-    valid.setVal(Real(0.0));
-    valid.setVal(Real(1.0), 0, 1, 0);
-    valid.FillBoundary(geom.periodicity());
+    SetValOnDefaultStream(valid, Real(0.0));
+    SetValOnDefaultStream(valid, Real(1.0), 0, 1, IntVect(0));
+    {
+        const Gpu::NoSyncRegion no_sync;
+        amrex::ignore_unused(no_sync);
+        valid.FillBoundary(geom.periodicity());
+    }
 
     const Box dom = amrex::convert(geom.Domain(), mf.boxArray().ixType());
 
@@ -33,7 +40,7 @@ void fill_ghost_kcomps (MultiFab& mf, int knew, const Geometry& geom)
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for (MFIter mfi(mf, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+    for (MFIter mfi(mf, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi) {
         Box gbx = mfi.growntilebox();
         const auto& a = mf.array(mfi);
         const auto& v = valid.const_array(mfi);

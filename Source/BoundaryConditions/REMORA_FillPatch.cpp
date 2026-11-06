@@ -34,13 +34,14 @@ void fill_single_level (MultiFab& mf, Real time, MultiFab* src, Real t_old, Real
     }
 }
 
-/** \brief dst(comp) = src(comp) wherever mask is set, ghost cells included */
+/** \brief dst(comp) = src(comp) wherever mask is set, ghost cells included, on the
+ *         default stream without synchronizing (see OnDefaultStream) */
 void copy_on_mask (MultiFab& dst, const MultiFab& src, const iMultiFab& mask, int comp)
 {
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    for (MFIter mfi(dst, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+    for (MFIter mfi(dst, OnDefaultStream(TilingIfNotGPU())); mfi.isValid(); ++mfi) {
         auto d = dst.array(mfi, comp);
         auto a = src.const_array(mfi, comp);
         auto m = mask.const_array(mfi);
@@ -349,7 +350,11 @@ REMORA::FillPatch (int lev, Real time, MultiFab& mf_to_fill, Vector<MultiFab*> c
         }
 
         if (hit && cf_2d_fill_cache == 1) {
+            // The copy, the exchange and the boundary conditions after it run on the default
+            // stream, so the exchange skips the synchronization that would end it.
             copy_on_mask(mf_to_fill, *cache->vals, *cache->mask, icomp);
+            const Gpu::NoSyncRegion no_sync;
+            amrex::ignore_unused(no_sync);
             mf_to_fill.FillBoundary(icomp, 1, mf_to_fill.nGrowVect(), geom[lev].periodicity());
         } else {
             Vector<MultiFab*> fmf = {mfs[lev], mfs[lev]};

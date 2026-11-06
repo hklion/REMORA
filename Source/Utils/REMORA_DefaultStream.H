@@ -42,24 +42,28 @@ inline amrex::MFItInfo OnDefaultStream (bool tiling = false)
 }
 
 /**
- * \brief mf.setVal(val, comp, ncomp, nghost) as one kernel for all boxes on the default
- *        stream, without synchronizing (see OnDefaultStream). On the host, mf.setVal.
+ * \brief mf.setVal(val, comp, ncomp, nghost) on the default stream, without synchronizing
+ *        (see OnDefaultStream). On the host, mf.setVal.
+ *
+ * One kernel per box: a kernel over all boxes would first copy the boxes' array table and
+ * box list to the device, which costs more than the launches for the short-lived MultiFabs
+ * these helpers are mostly used on.
  */
 inline void SetValOnDefaultStream (amrex::MultiFab& mf, amrex::Real val, int comp, int ncomp,
                                    amrex::IntVect const& nghost)
 {
-#ifdef AMREX_USE_GPU
-    if (amrex::Gpu::inLaunchRegion()) {
-        auto const& fa = mf.arrays();
-        amrex::ParallelFor(mf, nghost, ncomp,
-        [=] AMREX_GPU_DEVICE (int b, int i, int j, int k, int n) noexcept
-        {
-            fa[b](i,j,k,n+comp) = val;
-        });
+    if (amrex::Gpu::notInLaunchRegion()) {
+        mf.setVal(val, comp, ncomp, nghost);
         return;
     }
-#endif
-    mf.setVal(val, comp, ncomp, nghost);
+    for (amrex::MFIter mfi(mf, OnDefaultStream()); mfi.isValid(); ++mfi) {
+        auto const& a = mf.array(mfi);
+        amrex::ParallelFor(mfi.growntilebox(nghost), ncomp,
+        [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) noexcept
+        {
+            a(i,j,k,n+comp) = val;
+        });
+    }
 }
 
 /** \brief SetValOnDefaultStream on every component and ghost cell */
@@ -69,27 +73,52 @@ inline void SetValOnDefaultStream (amrex::MultiFab& mf, amrex::Real val)
 }
 
 /**
- * \brief MultiFab::Copy(dst, src, srccomp, dstcomp, ncomp, nghost) as one kernel for all
- *        boxes on the default stream, without synchronizing (see OnDefaultStream). On the
- *        host, MultiFab::Copy.
+ * \brief MultiFab::Copy(dst, src, srccomp, dstcomp, ncomp, nghost) on the default stream,
+ *        without synchronizing (see OnDefaultStream). On the host, MultiFab::Copy.
  */
 inline void CopyOnDefaultStream (amrex::MultiFab& dst, amrex::MultiFab const& src,
                                  int srccomp, int dstcomp, int ncomp,
                                  amrex::IntVect const& nghost)
 {
-#ifdef AMREX_USE_GPU
-    if (amrex::Gpu::inLaunchRegion()) {
-        auto const& d = dst.arrays();
-        auto const& s = src.const_arrays();
-        amrex::ParallelFor(dst, nghost, ncomp,
-        [=] AMREX_GPU_DEVICE (int b, int i, int j, int k, int n) noexcept
-        {
-            d[b](i,j,k,dstcomp+n) = s[b](i,j,k,srccomp+n);
-        });
+    if (amrex::Gpu::notInLaunchRegion()) {
+        amrex::MultiFab::Copy(dst, src, srccomp, dstcomp, ncomp, nghost);
         return;
     }
-#endif
-    amrex::MultiFab::Copy(dst, src, srccomp, dstcomp, ncomp, nghost);
+    for (amrex::MFIter mfi(dst, OnDefaultStream()); mfi.isValid(); ++mfi) {
+        auto const& d = dst.array(mfi);
+        auto const& s = src.const_array(mfi);
+        amrex::ParallelFor(mfi.growntilebox(nghost), ncomp,
+        [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) noexcept
+        {
+            d(i,j,k,dstcomp+n) = s(i,j,k,srccomp+n);
+        });
+    }
+}
+
+/**
+ * \brief MultiFab::LinComb(dst, a, x, xcomp, b, y, ycomp, dstcomp, ncomp, nghost) on the
+ *        default stream, without synchronizing (see OnDefaultStream). On the host,
+ *        MultiFab::LinComb.
+ */
+inline void LinCombOnDefaultStream (amrex::MultiFab& dst,
+                                    amrex::Real a, amrex::MultiFab const& x, int xcomp,
+                                    amrex::Real b, amrex::MultiFab const& y, int ycomp,
+                                    int dstcomp, int ncomp, amrex::IntVect const& nghost)
+{
+    if (amrex::Gpu::notInLaunchRegion()) {
+        amrex::MultiFab::LinComb(dst, a, x, xcomp, b, y, ycomp, dstcomp, ncomp, nghost);
+        return;
+    }
+    for (amrex::MFIter mfi(dst, OnDefaultStream()); mfi.isValid(); ++mfi) {
+        auto const& d  = dst.array(mfi);
+        auto const& xa = x.const_array(mfi);
+        auto const& ya = y.const_array(mfi);
+        amrex::ParallelFor(mfi.growntilebox(nghost), ncomp,
+        [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) noexcept
+        {
+            d(i,j,k,dstcomp+n) = a*xa(i,j,k,xcomp+n) + b*ya(i,j,k,ycomp+n);
+        });
+    }
 }
 
 #endif

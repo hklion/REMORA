@@ -278,7 +278,7 @@ void REMORAFillPatcher::InterpFace (MultiFab& fine,
         }
     }
 
-    for (MFIter mfi(fine); mfi.isValid(); ++mfi)
+    for (MFIter mfi(fine, OnDefaultStream()); mfi.isValid(); ++mfi)
     {
         Box const& fbx = mfi.validbox();
 
@@ -387,7 +387,7 @@ void REMORAFillPatcher::InterpCell (MultiFab& fine,
     IndexType m_ixt = fine.boxArray().ixType();
     Box const& cdomain = amrex::convert(m_cgeom.Domain(), m_ixt);
 
-    for (MFIter mfi(fine); mfi.isValid(); ++mfi) {
+    for (MFIter mfi(fine, OnDefaultStream()); mfi.isValid(); ++mfi) {
         Box const& fbx = mfi.validbox();
 
         Array4<Real> const&       fine_arr = fine.array(mfi);
