@@ -1,10 +1,12 @@
 #include "AMReX_PhysBCFunct.H"
 #include <REMORA_PhysBCFunct.H>
+#include <REMORA_BoxBatch.H>
 #include <REMORA_prob_common.H>
 
 using namespace amrex;
 
 /**
+ * @param[inout] batch         records the kernels for one launch over all boxes
  * @param[inout] dest_arr      data on which to apply BCs
  * @param[in   ] bx            box to update on
  * @param[in   ] domain        domain box
@@ -14,7 +16,7 @@ using namespace amrex;
  * @param[in   ] time          current time
  * @param[in   ] bccomp        index into both domain_bcs_type_bcr and bc_extdir_vals for icomp=0
  */
-void REMORAPhysBCFunct::impose_zvel_bcs (const Array4<Real>& dest_arr, const Box& bx, const Box& domain,
+void REMORAPhysBCFunct::impose_zvel_bcs (BoxBatch& batch, const Array4<Real>& dest_arr, const Box& bx, const Box& domain,
                                         const GpuArray<Real,AMREX_SPACEDIM> /*dxInv*/,const Array4<const Real>& mskr,
                                         Real /*time*/, int bccomp)
 {
@@ -58,7 +60,7 @@ void REMORAPhysBCFunct::impose_zvel_bcs (const Array4<Real>& dest_arr, const Box
     {
         Box bx_xlo(bx);  bx_xlo.setBig  (0,dom_lo.x-1);
         Box bx_xhi(bx);  bx_xhi.setSmall(0,dom_hi.x+1);
-        ParallelFor(
+        batch.ParallelFor(
             bx_xlo, ncomp, [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) {
                 const bool land = masked_var && mskr.contains(i,j,0) && mskr(i,j,0) == Real(0.0);
                 int iflip = dom_lo.x - 1 - i;
@@ -93,7 +95,7 @@ void REMORAPhysBCFunct::impose_zvel_bcs (const Array4<Real>& dest_arr, const Box
     {
         Box bx_ylo(bx);  bx_ylo.setBig  (1,dom_lo.y-1);
         Box bx_yhi(bx);  bx_yhi.setSmall(1,dom_hi.y+1);
-        ParallelFor(bx_ylo, ncomp, [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) {
+        batch.ParallelFor(bx_ylo, ncomp, [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) {
             const bool land = masked_var && mskr.contains(i,j,0) && mskr(i,j,0) == Real(0.0);
             int jflip = dom_lo.y - 1 - j;
             if (bcr.lo(1) == REMORABCType::ext_dir) {

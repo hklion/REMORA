@@ -1,6 +1,7 @@
 #include "AMReX_PhysBCFunct.H"
 #include "REMORA_IndexDefines.H"
 #include <REMORA_PhysBCFunct.H>
+#include <REMORA_BoxBatch.H>
 
 using namespace amrex;
 
@@ -41,6 +42,10 @@ void REMORAPhysBCFunct::operator() (MultiFab& mf, const MultiFab& msk, int icomp
     const bool null_mf_msku = !mf_msku.isDefined();
     const bool null_mf_mskv = !mf_mskv.isDefined();
 
+    // On the GPU the kernels of all boxes are recorded and launched together at the end
+    BoxBatch batch;
+    const MFItInfo info = batch.mfiter_info(false);
+
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
@@ -48,8 +53,9 @@ void REMORAPhysBCFunct::operator() (MultiFab& mf, const MultiFab& msk, int icomp
             if (mf.boxArray()[0].ixType() == IndexType(IntVect(0,0,0))) {
 
                 // Cell-centered arrays only
-                for (MFIter mfi(mf); mfi.isValid(); ++mfi)
+                for (MFIter mfi(mf, info); mfi.isValid(); ++mfi)
                 {
+                    batch.next_box();
                     const Array4<Real>& dest_arr = mf.array(mfi);
                     const Array4<const Real>& msk_arr = msk.array(mfi);
                     //const Array4<const Real>& calc_arr = mf_calc.array(mfi);
@@ -60,7 +66,7 @@ void REMORAPhysBCFunct::operator() (MultiFab& mf, const MultiFab& msk, int icomp
                     Box valid_bx = mfi.validbox();
 
                     if (!gdomain.contains(bx)) {
-                        impose_cons_bcs(dest_arr,bx,valid_bx,domain,dxInv,msk_arr,
+                        impose_cons_bcs(batch,dest_arr,bx,valid_bx,domain,dxInv,msk_arr,
                                 msku_arr,mskv_arr,calc_arr,icomp,ncomp,time,bccomp,n_not_fill);
                     }
                 } // mfi
@@ -68,8 +74,9 @@ void REMORAPhysBCFunct::operator() (MultiFab& mf, const MultiFab& msk, int icomp
             } else {
 
                 // Face-based arrays only
-                for (MFIter mfi(mf); mfi.isValid(); ++mfi)
+                for (MFIter mfi(mf, info); mfi.isValid(); ++mfi)
                 {
+                    batch.next_box();
                     Box bx = mfi.validbox(); bx.grow(nghost);
                     const Array4<const Real>& msk_arr = msk.array(mfi);
                     Array4<const Real> calc_arr = Array4<const Real>();
@@ -79,16 +86,18 @@ void REMORAPhysBCFunct::operator() (MultiFab& mf, const MultiFab& msk, int icomp
                     if (!gdomain.contains(bx)) {
                         if(bx.ixType() == IndexType(IntVect(1,0,0))) {
                             const Array4<Real>& dest_arr = mf.array(mfi,icomp);
-                            impose_xvel_bcs(dest_arr,bx,domain,dxInv,msk_arr,calc_arr,time,bccomp);
+                            impose_xvel_bcs(batch,dest_arr,bx,domain,dxInv,msk_arr,calc_arr,time,bccomp);
                         } else if (bx.ixType() == IndexType(IntVect(0,1,0))) {
                             const Array4<Real>& dest_arr = mf.array(mfi,icomp);
-                            impose_yvel_bcs(dest_arr,bx,domain,dxInv,msk_arr,calc_arr,time,bccomp);
+                            impose_yvel_bcs(batch,dest_arr,bx,domain,dxInv,msk_arr,calc_arr,time,bccomp);
                         } else if (bx.ixType() == IndexType(IntVect(0,0,1))) {
                             const Array4<Real>& dest_arr = mf.array(mfi,icomp);
-                            impose_zvel_bcs(dest_arr,bx,domain,dxInv,msk_arr,time,bccomp);
+                            impose_zvel_bcs(batch,dest_arr,bx,domain,dxInv,msk_arr,time,bccomp);
                         }
                     }
                 } // mfi
             } // box type
         } // OpenMP
+
+    batch.launch();
 } // operator()

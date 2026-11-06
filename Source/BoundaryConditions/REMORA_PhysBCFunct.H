@@ -16,6 +16,8 @@
 #include <REMORA_IndexDefines.H>
 #include <REMORA_DataStruct.H>
 
+class BoxBatch;
+
 using PlaneVector = amrex::Vector<amrex::FArrayBox>;
 
 class REMORAPhysBCFunct
@@ -49,24 +51,24 @@ public:
                      const amrex::MultiFab& mf_mskv = amrex::MultiFab());
 
     /** \brief apply x-velocity type boundary conditions */
-    void impose_xvel_bcs (const amrex::Array4<amrex::Real>& dest_arr, const amrex::Box& bx, const amrex::Box& domain,
+    void impose_xvel_bcs (BoxBatch& batch, const amrex::Array4<amrex::Real>& dest_arr, const amrex::Box& bx, const amrex::Box& domain,
                           const amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> dxInv, const amrex::Array4<const amrex::Real>& msku,
                           const amrex::Array4<const amrex::Real>& calc_arr, amrex::Real time, int bccomp);
 
     /** \brief apply y-velocity type boundary conditions */
-    void impose_yvel_bcs (const amrex::Array4<amrex::Real>& dest_arr, const amrex::Box& bx, const amrex::Box& domain,
+    void impose_yvel_bcs (BoxBatch& batch, const amrex::Array4<amrex::Real>& dest_arr, const amrex::Box& bx, const amrex::Box& domain,
                           const amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> dxInv, const amrex::Array4<const amrex::Real>& mskv,
                           const amrex::Array4<const amrex::Real>& calc_arr, amrex::Real time, int bccomp);
 
 
     /** \brief apply z-velocity type boundary conditions */
-    void impose_zvel_bcs (const amrex::Array4<amrex::Real>& dest_arr,
+    void impose_zvel_bcs (BoxBatch& batch, const amrex::Array4<amrex::Real>& dest_arr,
                           const amrex::Box& bx, const amrex::Box& domain,
                           const amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> dxInv, const amrex::Array4<const amrex::Real>& mskr,
                           amrex::Real time, int bccomp);
 
     /** \brief apply scalar type boundary conditions */
-    void impose_cons_bcs (const amrex::Array4<amrex::Real>& mf, const amrex::Box& bx, const amrex::Box& valid_bx,
+    void impose_cons_bcs (BoxBatch& batch, const amrex::Array4<amrex::Real>& mf, const amrex::Box& bx, const amrex::Box& valid_bx,
                           const amrex::Box& domain,
                           const amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> dxInv, const amrex::Array4<const amrex::Real>& mskr,
                           const amrex::Array4<const amrex::Real>& msku, const amrex::Array4<const amrex::Real>& mskv,
