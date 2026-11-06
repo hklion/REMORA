@@ -4,6 +4,27 @@
 
 using namespace amrex;
 
+namespace {
+/** The BCRecs amrex::setBC makes for a box, worked out where the kernels read them: the
+ *  domain's condition on each side the box reaches, int_dir on the others. Saves staging a
+ *  copy for every box on the device. */
+struct BoxBCRecs {
+    BCRec const* dom;
+    int lo_in[AMREX_SPACEDIM];
+    int hi_in[AMREX_SPACEDIM];
+
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+    BCRec operator[] (int n) const noexcept {
+        BCRec r;
+        for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+            r.setLo(dir, lo_in[dir] ? dom[n].lo(dir) : BCType::int_dir);
+            r.setHi(dir, hi_in[dir] ? dom[n].hi(dir) : BCType::int_dir);
+        }
+        return r;
+    }
+};
+} // namespace
+
 /**
  * @param[inout] batch         records the kernels for one launch over all boxes
  * @param[inout] dest_arr      data on which to apply BCs
@@ -44,11 +65,11 @@ void REMORAPhysBCFunct::impose_cons_bcs (BoxBatch& batch, const Array4<Real>& de
     // yhi: ori = 4
     // zhi: ori = 5
 
-    // Staged through pinned memory, kept until the batch has launched the kernels below and
-    // then freed in stream order, so nothing here has to wait for them to finish
-    auto bcrs_d = std::make_shared<Gpu::AsyncArray<BCRec>>(bcrs.data(), ncomp);
-    const amrex::BCRec* bc_ptr = bcrs_d->data();
-    batch.keep(std::move(bcrs_d));
+    BoxBCRecs bc_ptr{m_domain_bcs_type_d.data() + bccomp, {}, {}};
+    for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+        bc_ptr.lo_in[dir] = bx.smallEnd(dir) <= domain.smallEnd(dir) ? 1 : 0;
+        bc_ptr.hi_in[dir] = bx.bigEnd(dir)   >= domain.bigEnd(dir)   ? 1 : 0;
+    }
     const auto* bc_extdir_vals_ptr = m_bc_extdir_vals_d.data();
 
     GeometryData const& geomdata = m_geom.data();
