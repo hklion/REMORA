@@ -224,8 +224,14 @@ REMORA::advance_2d (int lev,
         set_2d_cf_flux(lev, t_old[lev], mf_DUon, mf_DVom);
     }
 
-    // One exchange for both so their messages are in flight together
-    amrex::FillBoundary(Vector<MultiFab*>{&mf_DUon, &mf_DVom}, geom[lev].periodicity());
+    // One exchange for both so their messages are in flight together. Without the stream
+    // synchronization that ends a local copy: what reads the fluxes next runs on the same
+    // stream, or synchronizes it first (an MFIter loop over several streams).
+    {
+        const Gpu::NoSyncRegion no_sync;
+        amrex::ignore_unused(no_sync);
+        amrex::FillBoundary(Vector<MultiFab*>{&mf_DUon, &mf_DVom}, geom[lev].periodicity());
+    }
 
 #ifdef REMORA_USE_NETCDF
     if (solverChoice.do_m2_clim_nudg) {
@@ -944,6 +950,17 @@ REMORA::advance_2d (int lev,
             // of knew changes. Post the three exchanges together so their messages are in
             // flight at once -- this runs every fast step -- then apply the conditions in
             // the same order as before.
+            //
+            // Nothing here needs the stream synchronization that ends each exchange's local
+            // copy: the boundary conditions run on the same stream, and so does the next
+            // fast step. The boundary data read from NetCDF files is filled with loops over
+            // several streams, which need it.
+#ifdef REMORA_USE_NETCDF
+            const bool skip_sync = !solverChoice.boundary_from_netcdf;
+#else
+            const bool skip_sync = true;
+#endif
+            const bool prev_no_sync = Gpu::setNoSyncRegion(skip_sync || Gpu::inNoSyncRegion());
             const Periodicity& per = geom[lev].periodicity();
             amrex::FillBoundary(Vector<MultiFab*>{vec_ubar[lev].get(), vec_vbar[lev].get(),
                                                   vec_zeta[lev].get()},
@@ -958,6 +975,7 @@ REMORA::advance_2d (int lev,
                          knew, 1, 0, know, dt2d, vbar_know);
             FillPatchBCs(lev, t_old[lev], *vec_zeta[lev], zeta_bc(), bdy_zeta(),
                          knew, 1, 0, know, dt2d, zeta_know);
+            amrex::ignore_unused(Gpu::setNoSyncRegion(prev_no_sync));
         } else {
             // The last argument names the cf_2d_cache slot: within a parent step these fills
             // repeat for the same few (component, time) pairs
