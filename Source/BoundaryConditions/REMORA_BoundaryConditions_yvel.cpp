@@ -113,74 +113,84 @@ void REMORAPhysBCFunct::impose_yvel_bcs (BoxBatch& batch, const Array4<Real>& de
         Box bx_ylo_face(bx); bx_ylo_face.setSmall(1,dom_lo.y  ); bx_ylo_face.setBig(1,dom_lo.y  );
         Box bx_yhi_face(bx); bx_yhi_face.setSmall(1,dom_hi.y+1); bx_yhi_face.setBig(1,dom_hi.y+1);
 
-        batch.ParallelFor(
-            // We only set the values on the domain faces themselves if EXT_DIR or outflow
-            grow(bx_ylo_face,IntVect(-1,0,0)) & dest_arr_box, ncomp, [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) {
-                if (bcr.lo(1) == REMORABCType::ext_dir) {
-                    dest_arr(i,j,k) = bc_extdir_vals_ptr[bccomp+n][1]*mskv(i,j,0);
-                } else if (bcr.lo(1) == REMORABCType::foextrap) {
-                    dest_arr(i,j,k) =  dest_arr(i,dom_lo.y+1,k)*mskv(i,j,0);
-                } else if (bcr.lo(1) == REMORABCType::orlanski_rad) {
-                    Real grad_lo_jp1  = calc_arr(i  ,dom_lo.y+1,k) - calc_arr(i-1,dom_lo.y+1,k);
-                    Real grad_lo_ijp1 = calc_arr(i+1,dom_lo.y+1,k) - calc_arr(i  ,dom_lo.y+1,k);
-                    Real dVdt = calc_arr(i,dom_lo.y+1,k) - dest_arr(i,dom_lo.y+1,k);
-                    Real dVde = dest_arr(i,dom_lo.y+1,k) - dest_arr(i,dom_lo.y+2,k);
-                    if (dVdt*dVde < zero) dVdt = zero;
-                    Real dVdx = (dVdt * (grad_lo_jp1 + grad_lo_ijp1) > zero) ? grad_lo_jp1 : grad_lo_ijp1;
-                    Real cff = std::max(dVdx*dVdx + dVde*dVde, eps);
-                    Real Ce = dVdt * dVde;
-                    dest_arr(i,j,k) = (cff * calc_arr(i,dom_lo.y,k) + Ce * dest_arr(i,dom_lo.y+1,k)) * mskv(i,j,0) / (cff + Ce);
-                }
-            });
-        batch.ParallelFor(
-            grow(bx_ylo,IntVect(-1,0,0)) & dest_arr_box, ncomp, [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) {
-                int jflip = dom_lo.y-j;
-                int inner = (bcr.lo(1) == REMORABCType::foextrap) ? 1 : 0;
-                if (bcr.lo(1) == REMORABCType::ext_dir) {
-                    dest_arr(i,j,k) = bc_extdir_vals_ptr[bccomp+n][1]*mskv(i,j,0);
-                } else if (bcr.lo(1) == REMORABCType::foextrap || bcr.lo(1) == REMORABCType::clamped ||
-                        bcr.lo(1) == REMORABCType::orlanski_rad) {
-                    dest_arr(i,j,k) =  dest_arr(i,dom_lo.y+inner,k)*mskv(i,j,0);
-                } else if (bcr.lo(1) == REMORABCType::reflect_even) {
-                    dest_arr(i,j,k) =  dest_arr(i,jflip,k)*mskv(i,j,0);
-                } else if (bcr.lo(1) == REMORABCType::reflect_odd) {
-                    dest_arr(i,j,k) = -dest_arr(i,jflip,k)*mskv(i,j,0);
-                }
-            });
-        batch.ParallelFor(
-            // We only set the values on the domain faces themselves if EXT_DIR or outflow
-            grow(bx_yhi_face,IntVect(-1,0,0)) & dest_arr_box, ncomp, [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) {
-                if (bcr.hi(1) == REMORABCType::ext_dir) {
-                    dest_arr(i,j,k) = bc_extdir_vals_ptr[bccomp+n][4]*mskv(i,j,0);
-                } else if (bcr.hi(1) == REMORABCType::foextrap) {
-                    dest_arr(i,j,k) =  dest_arr(i,dom_hi.y,k)*mskv(i,j,0);
-                 } else if (bcr.hi(1) == REMORABCType::orlanski_rad) {
-                    Real grad_hi      = calc_arr(i  ,dom_hi.y  ,k) - calc_arr(i-1,dom_hi.y  ,k);
-                    Real grad_hi_ip1  = calc_arr(i+1,dom_hi.y  ,k) - calc_arr(i  ,dom_hi.y  ,k);
-                    Real dVdt = calc_arr(i,dom_hi.y,k) - dest_arr(i,dom_hi.y  ,k);
-                    Real dVde = dest_arr(i,dom_hi.y,k) - dest_arr(i,dom_hi.y-1,k);
-                    if (dVdt*dVde < zero) dVdt = zero;
-                    Real dVdx = (dVdt * (grad_hi + grad_hi_ip1) > zero) ? grad_hi : grad_hi_ip1;
-                    Real cff = std::max(dVdx*dVdx + dVde*dVde, eps);
-                    Real Ce = dVdt * dVde;
-                    dest_arr(i,j,k) = (cff * calc_arr(i,dom_hi.y+1,k) + Ce * dest_arr(i,dom_hi.y,k)) * mskv(i,j,0) / (cff + Ce);
-                }
-            });
-        batch.ParallelFor(
-            grow(bx_yhi,IntVect(-1,0,0)) & dest_arr_box, ncomp, [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) {
-                 int jflip =  2*(dom_hi.y + 1) - j;
-                 int inner = (bcr.hi(1) == REMORABCType::foextrap) ? 1 : 0;
-                 if (bcr.hi(1) == REMORABCType::ext_dir) {
-                     dest_arr(i,j,k) = bc_extdir_vals_ptr[bccomp+n][4]*mskv(i,j,0);
-                 } else if (bcr.hi(1) == REMORABCType::foextrap || bcr.hi(1) == REMORABCType::clamped ||
-                         bcr.hi(1) == REMORABCType::orlanski_rad) {
-                     dest_arr(i,j,k) =  dest_arr(i,dom_hi.y+1-inner,k)*mskv(i,j,0);
-                 } else if (bcr.hi(1) == REMORABCType::reflect_even) {
-                     dest_arr(i,j,k) =  dest_arr(i,jflip,k)*mskv(i,j,0);
-                 } else if (bcr.hi(1) == REMORABCType::reflect_odd) {
-                     dest_arr(i,j,k) = -dest_arr(i,jflip,k)*mskv(i,j,0);
-                }
-            });
+        // We only set the values on the domain faces themselves if EXT_DIR or outflow
+        auto f_lo_face = [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) {
+            if (bcr.lo(1) == REMORABCType::ext_dir) {
+                dest_arr(i,j,k) = bc_extdir_vals_ptr[bccomp+n][1]*mskv(i,j,0);
+            } else if (bcr.lo(1) == REMORABCType::foextrap) {
+                dest_arr(i,j,k) =  dest_arr(i,dom_lo.y+1,k)*mskv(i,j,0);
+            } else if (bcr.lo(1) == REMORABCType::orlanski_rad) {
+                Real grad_lo_jp1  = calc_arr(i  ,dom_lo.y+1,k) - calc_arr(i-1,dom_lo.y+1,k);
+                Real grad_lo_ijp1 = calc_arr(i+1,dom_lo.y+1,k) - calc_arr(i  ,dom_lo.y+1,k);
+                Real dVdt = calc_arr(i,dom_lo.y+1,k) - dest_arr(i,dom_lo.y+1,k);
+                Real dVde = dest_arr(i,dom_lo.y+1,k) - dest_arr(i,dom_lo.y+2,k);
+                if (dVdt*dVde < zero) dVdt = zero;
+                Real dVdx = (dVdt * (grad_lo_jp1 + grad_lo_ijp1) > zero) ? grad_lo_jp1 : grad_lo_ijp1;
+                Real cff = std::max(dVdx*dVdx + dVde*dVde, eps);
+                Real Ce = dVdt * dVde;
+                dest_arr(i,j,k) = (cff * calc_arr(i,dom_lo.y,k) + Ce * dest_arr(i,dom_lo.y+1,k)) * mskv(i,j,0) / (cff + Ce);
+            }
+        };
+        auto f_lo = [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) {
+            int jflip = dom_lo.y-j;
+            int inner = (bcr.lo(1) == REMORABCType::foextrap) ? 1 : 0;
+            if (bcr.lo(1) == REMORABCType::ext_dir) {
+                dest_arr(i,j,k) = bc_extdir_vals_ptr[bccomp+n][1]*mskv(i,j,0);
+            } else if (bcr.lo(1) == REMORABCType::foextrap || bcr.lo(1) == REMORABCType::clamped ||
+                    bcr.lo(1) == REMORABCType::orlanski_rad) {
+                dest_arr(i,j,k) =  dest_arr(i,dom_lo.y+inner,k)*mskv(i,j,0);
+            } else if (bcr.lo(1) == REMORABCType::reflect_even) {
+                dest_arr(i,j,k) =  dest_arr(i,jflip,k)*mskv(i,j,0);
+            } else if (bcr.lo(1) == REMORABCType::reflect_odd) {
+                dest_arr(i,j,k) = -dest_arr(i,jflip,k)*mskv(i,j,0);
+            }
+        };
+        // We only set the values on the domain faces themselves if EXT_DIR or outflow
+        auto f_hi_face = [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) {
+            if (bcr.hi(1) == REMORABCType::ext_dir) {
+                dest_arr(i,j,k) = bc_extdir_vals_ptr[bccomp+n][4]*mskv(i,j,0);
+            } else if (bcr.hi(1) == REMORABCType::foextrap) {
+                dest_arr(i,j,k) =  dest_arr(i,dom_hi.y,k)*mskv(i,j,0);
+             } else if (bcr.hi(1) == REMORABCType::orlanski_rad) {
+                Real grad_hi      = calc_arr(i  ,dom_hi.y  ,k) - calc_arr(i-1,dom_hi.y  ,k);
+                Real grad_hi_ip1  = calc_arr(i+1,dom_hi.y  ,k) - calc_arr(i  ,dom_hi.y  ,k);
+                Real dVdt = calc_arr(i,dom_hi.y,k) - dest_arr(i,dom_hi.y  ,k);
+                Real dVde = dest_arr(i,dom_hi.y,k) - dest_arr(i,dom_hi.y-1,k);
+                if (dVdt*dVde < zero) dVdt = zero;
+                Real dVdx = (dVdt * (grad_hi + grad_hi_ip1) > zero) ? grad_hi : grad_hi_ip1;
+                Real cff = std::max(dVdx*dVdx + dVde*dVde, eps);
+                Real Ce = dVdt * dVde;
+                dest_arr(i,j,k) = (cff * calc_arr(i,dom_hi.y+1,k) + Ce * dest_arr(i,dom_hi.y,k)) * mskv(i,j,0) / (cff + Ce);
+            }
+        };
+        auto f_hi = [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) {
+             int jflip =  2*(dom_hi.y + 1) - j;
+             int inner = (bcr.hi(1) == REMORABCType::foextrap) ? 1 : 0;
+             if (bcr.hi(1) == REMORABCType::ext_dir) {
+                 dest_arr(i,j,k) = bc_extdir_vals_ptr[bccomp+n][4]*mskv(i,j,0);
+             } else if (bcr.hi(1) == REMORABCType::foextrap || bcr.hi(1) == REMORABCType::clamped ||
+                     bcr.hi(1) == REMORABCType::orlanski_rad) {
+                 dest_arr(i,j,k) =  dest_arr(i,dom_hi.y+1-inner,k)*mskv(i,j,0);
+             } else if (bcr.hi(1) == REMORABCType::reflect_even) {
+                 dest_arr(i,j,k) =  dest_arr(i,jflip,k)*mskv(i,j,0);
+             } else if (bcr.hi(1) == REMORABCType::reflect_odd) {
+                 dest_arr(i,j,k) = -dest_arr(i,jflip,k)*mskv(i,j,0);
+            }
+        };
+        // Fill the ylo and yhi faces in one loop and then their ghost cells in one. A box
+        // reaching both sides may do so when the domain is wide enough that neither side
+        // reads what the other writes (reflection reads cells gy from index 0); otherwise
+        // it fills the lo side first, then the hi side, in the last two loops.
+        const int gy = std::max(std::max(dom_lo.y - bx.smallEnd(1), bx.bigEnd(1) - (dom_hi.y+1)), 0);
+        const bool pair_sides = dom_lo.y == 0 && dom_hi.y + 1 > gy + 3;
+        const Box lo_face = grow(bx_ylo_face,IntVect(-1,0,0)) & dest_arr_box;
+        const Box lo_ghost = grow(bx_ylo,IntVect(-1,0,0)) & dest_arr_box;
+        const Box hi_face = grow(bx_yhi_face,IntVect(-1,0,0)) & dest_arr_box;
+        const Box hi_ghost = grow(bx_yhi,IntVect(-1,0,0)) & dest_arr_box;
+        batch.ParallelFor(lo_face, ncomp, f_lo_face, pair_sides ? hi_face : Box(), ncomp, f_hi_face);
+        batch.ParallelFor(lo_ghost, ncomp, f_lo, pair_sides ? hi_ghost : Box(), ncomp, f_hi);
+        batch.ParallelFor(Box(), ncomp, f_lo_face, pair_sides ? Box() : hi_face, ncomp, f_hi_face);
+        batch.ParallelFor(Box(), ncomp, f_lo, pair_sides ? Box() : hi_ghost, ncomp, f_hi);
     }
 
     {
