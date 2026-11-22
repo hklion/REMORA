@@ -597,6 +597,14 @@ assertion is that they agree and neither needs a stored reference.
 |                                 |          |                                                         |
 |                                 |          | boundary file data is rejected, naming the side         |
 +---------------------------------+----------+---------------------------------------------------------+
+| BC_nudg_coeff_ghosts            | 10 16 4  | radiation conditions with nudging, with coefficients    |
+|                                 |          |                                                         |
+| (PnetCDF builds only)           |          | read from a file in 1/day, run 100 steps with the       |
+|                                 |          |                                                         |
+|                                 |          | overflow trap on: the coefficients are converted to 1/s |
+|                                 |          |                                                         |
+|                                 |          | in every ghost cell the boundary fill reads             |
++---------------------------------+----------+---------------------------------------------------------+
 
 ``BC_per_variable`` runs both inputs in its test directory and compares the two plotfiles. All four sides
 carry a different condition -- inflow, noslipwall, outflow, slipwall going West, South, East, North -- so

@@ -958,6 +958,15 @@ compose_test_input(BC_flather_no_zeta_data BC_per_variable)
 add_test_abort(BC_flather_no_zeta_data "remora_exec"
                "East boundary uses Flather for the normal barotropic velocity")
 
+# Radiation conditions with nudging, with momentum nudging coefficients read from a file in
+# 1/day, on sides cut into several boxes. The boundary fill reads the coefficient in the
+# outermost ghost layer, so all of the ghost cells have to be converted to 1/s: a coefficient
+# left in 1/day makes the fill overshoot by a factor of about 1000 per step, and the overflow
+# trap stops the run.
+if (REMORA_ENABLE_PNETCDF)
+  add_test_run(BC_nudg_coeff_ghosts BC_nudg_coeff_ghosts "remora_exec" "")
+endif ()
+
 #=============================================================================
 # Barotropic substep count
 #
