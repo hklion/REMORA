@@ -67,9 +67,8 @@ class NCTimeSeries
 
         /** \brief Access interpolated data saved for a specific level */
         const amrex::MultiFab* get_interpolated_mf (int lev) const;
-    private:
-        /** \brief Read in data from file at time index itime and fill into mf */
-        void read_in_at_time (amrex::MultiFab* mf, int itime);
+
+        // Kernels. Public because CUDA does not allow a device lambda in a private member.
 
         /** \brief Interpolate the records around l_time, the time within the series, into
          *         mf_interp_lev0, reading records as needed */
@@ -79,6 +78,9 @@ class NCTimeSeries
         void fill_level_from_lev0 (int lev, amrex::MultiFab* mf_to_fill_lev,
                                    const amrex::Vector<amrex::Geometry>& geom,
                                    const amrex::Vector<amrex::IntVect>& ref_ratio);
+    private:
+        /** \brief Read in data from file at time index itime and fill into mf */
+        void read_in_at_time (amrex::MultiFab* mf, int itime);
 
         /** \brief Everywhere the file holds data on level 0: the domain plus the ROMS ring
          *         outside a non-nodal edge */
